@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787842275427,
+      "tag": "0000_overjoyed_dark_phoenix",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787896810700,
+      "tag": "0001_talented_molten_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788187742285,
+      "tag": "0002_exotic_skullbuster",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+'use client';
+
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: { initData: string; ready: () => void; expand: () => void } };
+  }
+}
+
+type User = { id: number; name: string; role: 'employee' | 'admin'; username?: string | null; photoUrl?: string | null };
+type Dish = {
+  id: number; name: string; short_description: string; ingredients: string[];
+  allergens: string[]; service_note: string; badge: string; color: string;
+  category: string; weight: number; components: Record<string, string[]>;
+};
+type Invite = { code: string; label: string; role: string; max_uses: number; used_count: number };
+type AppData = { user: User | null; dishes: Dish[]; invites: Invite[]; staffCount: number };
+type Tab = 'menu' | 'test' | 'book' | 'admin';
+
+const emptyData: AppData = { user: null, dishes: [], invites: [], staffCount: 0 };
+
+const menuSections = [
+  { id: 'crudo', name: 'Крудо', caption: 'Raw bar', symbol: '◉', tone: 'sea' },
+  { id: 'starters', name: 'Закуски', caption: 'Для начала', symbol: '✦', tone: 'olive' },
+  { id: 'bruschetta', name: 'Брускетты', caption: 'На хлебе', symbol: '▱', tone: 'terracotta' },
+  { id: 'salads', name: 'Салаты', caption: 'Свежие', symbol: '◇', tone: 'leaf' },
+  { id: 'healthy', name: 'ЗОЖ', caption: 'Баланс', symbol: '◎', tone: 'mint' },
+  { id: 'soups', name: 'Супы', caption: 'Тёплые', symbol: '∿', tone: 'amber' },
+  { id: 'pasta', name: 'Паста и ризотто', caption: 'Итальянская классика', symbol: '≈', tone: 'wheat' },
+  { id: 'pizza', name: 'Пицца', caption: 'Из печи', symbol: '○', tone: 'tomato' },
+  { id: 'focaccia', name: 'Фокачча', caption: 'Из печи', symbol: '▤', tone: 'sand' },
+  { id: 'meat', name: 'Мясо и птица', caption: 'Основные блюда', symbol: '◐', tone: 'wine' },
+  { id: 'sides', name: 'Гарниры', caption: 'Дополнения', symbol: '+', tone: 'herb' },
+  { id: 'fish', name: 'Рыба и морепродукты', caption: 'Из моря', symbol: '≋', tone: 'ocean' },
+  { id: 'desserts', name: 'Десерты', caption: 'Dolce', symbol: '✧', tone: 'berry' },
+] as const;
+
+async function api<T = Record<string, unknown>>(body?: Record<string, unknown>): Promise<T> {
+  const response = await fetch('/api/app', body ? {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  } : undefined);
+  const result = await response.json() as { error?: string };
+  if (!response.ok) throw new Error(result.error || 'Что-то пошло не так');
+  return result as T;
+}
+
+function Icon({ name }: { name: string }) {
+  const icons: Record<string, string> = { menu: '⌂', test: '✓', book: '◇', admin: '⚙', search: '⌕', back: '‹', close: '×', plus: '+', edit: '✎' };
+  return <span aria-hidden="true" className="icon">{icons[name]}</span>;
+}
+
+function JoinScreen({ onJoin }: { onJoin: (user: User) => void }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setError(''); setBusy(true);
+    try {
+      const result = await api<{ user: User }>({ action: 'join', code, initData: window.Telegram?.WebApp?.initData || '' });
+      onJoin(result.user);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <main className="app-shell join-shell">
+      <section className="phone-frame join-frame">
+        <div className="brand-mark">DP</div>
+        <p className="eyebrow center">Due Passi · Команда</p>
+        <h1 className="join-title">Добро пожаловать<br />в команду</h1>
+        <p className="join-copy">Изучайте меню, проверяйте знания и сохраняйте стандарты гостеприимства в одном месте.</p>
+        <form className="join-form" onSubmit={submit}>
+          <label><span>Код доступа</span><input className="code-input" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" inputMode="numeric" autoComplete="one-time-code" /></label>
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary-button" disabled={busy}>{busy ? 'Проверяем…' : 'Продолжить'}</button>
+        </form>
+        <div className="telegram-note"><span>✦</span><div><strong>Профиль из Telegram</strong><p>Имя и фотография сотрудника загрузятся автоматически.</p></div></div>
+      </section>
+    </main>
+  );
+}
+
+function DishDetail({ dish, onClose }: { dish: Dish; onClose: () => void }) {
+  const [componentName, setComponentName] = useState<string | null>(null);
+  const sectionName = menuSections.find((section) => section.id === dish.category)?.name ?? 'Меню';
+  const componentItems = componentName ? dish.components?.[componentName] ?? [] : [];
+  const baseIngredients = dish.ingredients.filter((item) => !dish.components?.[item]?.length);
+  const compoundIngredients = dish.ingredients.filter((item) => dish.components?.[item]?.length);
+  return (
+    <div className="sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="detail-sheet" role="dialog" aria-modal="true" aria-label={dish.name}>
+        <div className={`detail-hero ${dish.color}`}>
+          <button className="glass-button" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>
+          <span className="detail-number">{sectionName} · {dish.weight ? `${dish.weight} г` : String(dish.id).padStart(2, '0')}</span>
+          <div><span className="light-tag">{dish.badge}</span><h2>{dish.name}</h2><p>{dish.short_description}</p></div>
+        </div>
+        <div className="detail-body">
+          <p className="eyebrow">Основа и дополнения</p>
+          <div className="ingredient-cloud">{baseIngredients.map((item) => <span key={item}>{item}</span>)}</div>
+          {compoundIngredients.length > 0 && <><p className="eyebrow ingredient-subtitle">Соусы и составные компоненты</p><div className="ingredient-cloud compound-cloud">{compoundIngredients.map((item) => <button className="nested-ingredient" key={item} onClick={() => setComponentName(item)}>{item}<small>нажмите, чтобы открыть состав</small><b>›</b></button>)}</div></>}
+          <div className="info-block"><span className="info-symbol">!</span><div><strong>Важно для гостя</strong><p>{dish.service_note}</p></div></div>
+          <div className="allergen-row"><span>Аллергены</span><strong>{dish.allergens.join(', ') || 'не указаны'}</strong></div>
+          {dish.weight > 0 && <div className="weight-row"><span>Выход блюда</span><strong>{dish.weight} г</strong></div>}
+        </div>
+        {componentName && <div className="component-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setComponentName(null)}><section className="component-card"><button onClick={() => setComponentName(null)} aria-label="Закрыть">×</button><p className="eyebrow">Внутренний состав</p><h3>{componentName}</h3><div>{componentItems.map((item, index) => <span key={item}><i>{String(index + 1).padStart(2, '0')}</i>{item}</span>)}</div><small>Нажмите вне окна, чтобы закрыть</small></section></div>}
+      </section>
+    </div>
+  );
+}
+
+function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish) => void }) {
+  const [sectionId, setSectionId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const currentSection = menuSections.find((section) => section.id === sectionId);
+  const sectionDishes = currentSection ? dishes.filter((dish) => dish.category === currentSection.id) : [];
+  const filtered = sectionDishes.filter((dish) => `${dish.name} ${dish.ingredients.join(' ')}`.toLowerCase().includes(query.toLowerCase()));
+  const renderDishList = (items: Dish[]) => <div className="dish-list">{items.map((dish) => <button className="dish-card" key={dish.id} onClick={() => onSelect(dish)}><div className={`dish-visual ${dish.color}`}><span>{String(filtered.indexOf(dish) + 1).padStart(2, '0')}</span><i /></div><div className="dish-copy"><div className="dish-meta"><span className="tag">{dish.badge}</span>{dish.weight > 0 && <span className="weight-chip">{dish.weight} г</span>}</div><h3>{dish.name}</h3><p>{dish.ingredients.slice(0, 4).join(', ')}</p></div><span className="chevron">›</span></button>)}</div>;
+  const tomatoPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => dish.ingredients.includes('соус пицца')) : [];
+  const creamyPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => dish.ingredients.some((item) => item === 'сливки' || item.startsWith('сливки '))) : [];
+  const otherPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => !tomatoPizza.includes(dish) && !creamyPizza.includes(dish)) : [];
+
+  if (!currentSection) return <>
+    <section className="intro-card menu-intro">
+      <p className="intro-kicker">Меню ресторана</p><h2>Изучайте каждое<br />блюдо уверенно.</h2>
+      <div className="intro-meta"><span>13 разделов</span><span>≈ 50 блюд</span></div>
+    </section>
+    <div className="catalog-heading"><div><p className="eyebrow">Все категории</p><h2>Разделы меню</h2></div><span>13</span></div>
+    <div className="category-grid">
+      {menuSections.map((section, index) => <button className={`category-card tone-${section.tone}`} key={section.id} onClick={() => { setSectionId(section.id); setSearchOpen(false); setQuery(''); }}>
+        <span className="category-index">{String(index + 1).padStart(2, '0')}</span>
+        <span className="category-symbol">{section.symbol}</span>
+        <div><strong>{section.name}</strong><small>{dishes.filter((dish) => dish.category === section.id).length ? `${dishes.filter((dish) => dish.category === section.id).length} блюд` : section.caption}</small></div>
+        <i>›</i>
+      </button>)}
+    </div>
+  </>;
+
+  const sectionNumber = menuSections.findIndex((section) => section.id === currentSection.id) + 1;
+  const hasDishes = sectionDishes.length > 0;
+  return <section className="category-view">
+    <button className="back-link category-back" onClick={() => setSectionId(null)}><Icon name="back" /> Все разделы</button>
+    <div className={`category-banner tone-${currentSection.tone}`}>
+      <span className="category-symbol">{currentSection.symbol}</span>
+      <div><p>Раздел {String(sectionNumber).padStart(2, '0')}</p><h2>{currentSection.name}</h2><small>{hasDishes ? `${sectionDishes.length} блюд в разделе` : currentSection.caption}</small></div>
+    </div>
+    {hasDishes ? <>
+      <div className="section-heading compact-heading"><div><p className="eyebrow">Блюда</p><h2>Состав и подача</h2></div><button className="round-action" aria-label="Поиск" onClick={() => setSearchOpen(!searchOpen)}><Icon name="search" /></button></div>
+      {searchOpen && <div className="search-box"><Icon name="search" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Блюдо или ингредиент" /><button onClick={() => { setQuery(''); setSearchOpen(false); }}>×</button></div>}
+      {currentSection.id === 'pizza' ? <div className="pizza-groups">
+        {tomatoPizza.length > 0 && <section className="dish-subsection"><div className="dish-group-heading"><span className="base-dot tomato-dot" /><div><strong>Томатная основа</strong><small>{tomatoPizza.length} позиций</small></div></div>{renderDishList(tomatoPizza)}</section>}
+        {creamyPizza.length > 0 && <section className="dish-subsection"><div className="dish-group-heading"><span className="base-dot cream-dot" /><div><strong>Сливочная основа</strong><small>{creamyPizza.length} позиций</small></div></div>{renderDishList(creamyPizza)}</section>}
+        {otherPizza.length > 0 && <section className="dish-subsection"><div className="dish-group-heading"><span className="base-dot other-dot" /><div><strong>Другая основа</strong><small>{otherPizza.length} позиций</small></div></div>{renderDishList(otherPizza)}</section>}
+        {!filtered.length && <div className="empty-state"><span>⌕</span><strong>Ничего не найдено</strong><p>Попробуйте изменить запрос</p></div>}
+      </div> : <>{renderDishList(filtered)}{!filtered.length && <div className="empty-state"><span>⌕</span><strong>Ничего не найдено</strong><p>Попробуйте изменить запрос</p></div>}</>}
+    </> : <div className="section-placeholder"><span className={`placeholder-symbol tone-${currentSection.tone}`}>{currentSection.symbol}</span><strong>Раздел готов</strong><p>Блюда категории «{currentSection.name}» добавим на следующем этапе.</p><button onClick={() => setSectionId(null)}>Вернуться к меню</button></div>}
+  </section>;
+}
+
+function TestView({ dishes, user }: { dishes: Dish[]; user: User }) {
+  const [started, setStarted] = useState(false); const [current, setCurrent] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]); const [score, setScore] = useState(0);
+  const [answered, setAnswered] = useState(false); const [finished, setFinished] = useState(false); const [finalScore, setFinalScore] = useState(0);
+  const questions = dishes.slice(0, Math.min(5, dishes.length));
+  const options = useMemo(() => {
+    const correct = questions[current]?.ingredients ?? [];
+    const extras = dishes.flatMap((dish) => dish.ingredients).filter((item) => !correct.includes(item));
+    return [...correct, ...extras.slice(current * 2, current * 2 + 4)].sort((a, b) => a.localeCompare(b));
+  }, [current, dishes, questions]);
+  const isCorrect = questions[current] && selected.length === questions[current].ingredients.length && selected.every((item) => questions[current].ingredients.includes(item));
+
+  function restart() { setStarted(true); setCurrent(0); setSelected([]); setScore(0); setFinalScore(0); setAnswered(false); setFinished(false); }
+  async function next() {
+    if (!answered) { setAnswered(true); return; }
+    const nextScore = score + (isCorrect ? 1 : 0);
+    setScore(nextScore);
+    if (current === questions.length - 1) { setFinalScore(nextScore); setFinished(true); await api({ action: 'attempt', staffId: user.id, score: nextScore, total: questions.length }); }
+    else { setCurrent((value) => value + 1); setSelected([]); setAnswered(false); }
+  }
+
+  if (!started) return <section className="feature-view"><div className="feature-icon">✓</div><p className="eyebrow center">Проверка знаний</p><h2>Готовы проверить<br />себя?</h2><p>Выберите правильный состав для {questions.length} блюд раздела «Крудо».</p><div className="test-stats"><div><strong>{questions.length}</strong><span>вопросов</span></div><div><strong>80%</strong><span>проходной балл</span></div></div><button className="primary-button" onClick={restart}>Начать тест</button></section>;
+  if (finished) return <section className="feature-view result-view"><div className="score-ring"><strong>{Math.round(finalScore / questions.length * 100)}%</strong><span>{finalScore} из {questions.length}</span></div><p className="eyebrow center">Тест завершён</p><h2>{finalScore / questions.length >= .8 ? 'Отличный результат!' : 'Стоит повторить меню'}</h2><p>Результат сохранён в локальной базе приложения.</p><button className="primary-button" onClick={restart}>Пройти ещё раз</button></section>;
+  const dish = questions[current];
+  return <section className="quiz-view"><div className="quiz-top"><span>Вопрос {current + 1} из {questions.length}</span><strong>{Math.round((current + 1) / questions.length * 100)}%</strong></div><div className="progress"><i style={{ width: `${(current + 1) / questions.length * 100}%` }} /></div><p className="eyebrow">Выберите весь состав</p><h2>{dish.name}</h2><div className="options">{options.map((option) => { const checked = selected.includes(option); const right = dish.ingredients.includes(option); return <button disabled={answered} key={option} className={`${checked ? 'selected' : ''} ${answered && checked ? (right ? 'right' : 'wrong') : ''}`} onClick={() => setSelected(checked ? selected.filter((item) => item !== option) : [...selected, option])}><span>{checked ? '✓' : ''}</span>{option}</button>; })}</div>{answered && <div className={`answer-note ${isCorrect ? 'success' : 'error'}`}><strong>{isCorrect ? 'Верно!' : 'Есть неточности'}</strong><p>{isCorrect ? 'Вы отлично знаете это блюдо.' : `Правильный состав: ${dish.ingredients.join(', ')}.`}</p></div>}<button className="primary-button sticky-action" disabled={!selected.length} onClick={next}>{answered ? (current === questions.length - 1 ? 'Узнать результат' : 'Следующий вопрос') : 'Проверить'}</button></section>;
+}
+
+function BookView() {
+  const bookUrl = '/books/due-passi-hospitality-book.pdf';
+  return <section className="book-reader-view">
+    <div className="book-reader-heading"><div><p className="eyebrow">Due Passi · Обучение</p><h2>Книга гостеприимства</h2><span>Сводная редакция · 60 страниц</span></div><a href={bookUrl} target="_blank" rel="noreferrer" aria-label="Открыть книгу отдельно">↗</a></div>
+    <iframe className="pdf-reader" src={`${bookUrl}#view=FitH&toolbar=1&navpanes=0`} title="Книга гостеприимства Due Passi" />
+    <div className="book-reader-actions"><a className="secondary-button" href={bookUrl} target="_blank" rel="noreferrer">Открыть отдельно</a><a className="secondary-button" href={bookUrl} download>Скачать PDF</a></div>
+  </section>;
+}
+
+function AdminView({ data, refresh }: { data: AppData; refresh: () => Promise<void> }) {
+  const [mode, setMode] = useState<'home' | 'dish'>('home');
+  const [editing, setEditing] = useState<Dish | null>(null); const [message, setMessage] = useState('');
+  const [adminCategory, setAdminCategory] = useState('crudo');
+  const categoryDishes = data.dishes.filter((dish) => dish.category === adminCategory);
+  const categoryName = menuSections.find((section) => section.id === adminCategory)?.name ?? 'Меню';
+
+  async function saveDish(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    const category = String(form.get('category') || adminCategory);
+    const components = Object.fromEntries(String(form.get('components') || '').split('\n').map((line) => { const separator = line.indexOf(':'); if (separator < 0) return null; const component = line.slice(0, separator).trim().toLowerCase(); const items = line.slice(separator + 1).split(',').map((item) => item.trim()).filter(Boolean); return component && items.length ? [component, items] : null; }).filter((entry): entry is [string, string[]] => Boolean(entry)));
+    try { await api({ action: 'saveDish', id: editing?.id, name: form.get('name'), short_description: form.get('description'), ingredients: String(form.get('ingredients') || '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean), allergens: String(form.get('allergens') || '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean), service_note: form.get('note'), badge: form.get('badge'), category, weight: Number(form.get('weight') || 0), components, color: editing?.color || (category === 'bruschetta' ? 'terracotta' : 'sage') }); setMessage('Блюдо сохранено'); setAdminCategory(category); setMode('home'); setEditing(null); await refresh(); } catch (err) { setMessage(err instanceof Error ? err.message : 'Ошибка'); }
+  }
+
+  if (mode === 'dish') return <section className="admin-view"><button className="back-link" onClick={() => { setMode('home'); setEditing(null); }}><Icon name="back" /> Назад</button><p className="eyebrow">Редактор меню</p><h2>{editing ? 'Изменить блюдо' : 'Новое блюдо'}</h2><form className="admin-form" onSubmit={saveDish}><label><span>Раздел меню</span><select name="category" defaultValue={editing?.category || adminCategory}>{menuSections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select></label><label><span>Название</span><input name="name" defaultValue={editing?.name} required /></label><div className="admin-form-row"><label><span>Вес, г</span><input name="weight" type="number" min="0" defaultValue={editing?.weight || ''} placeholder="220" /></label><label><span>Метка</span><input name="badge" defaultValue={editing?.badge} placeholder="Хит" /></label></div><label><span>Короткое описание</span><textarea name="description" defaultValue={editing?.short_description} /></label><label><span>Основной состав через запятую</span><textarea name="ingredients" defaultValue={editing?.ingredients.join(', ')} required /></label><label><span>Вложенные составы</span><textarea className="components-input" name="components" defaultValue={Object.entries(editing?.components || {}).map(([name, items]) => `${name}: ${items.join(', ')}`).join('\n')} placeholder={'крем дайкон: сыр креметте, соус шрирача\nгуакамоле: авокадо, халапеньо'} /><small className="field-help">Каждый соус — с новой строки в формате «название: ингредиенты».</small></label><label><span>Аллергены через запятую</span><input name="allergens" defaultValue={editing?.allergens.join(', ')} /></label><label><span>Подсказка официанту</span><textarea name="note" defaultValue={editing?.service_note} /></label><button className="primary-button">Сохранить блюдо</button></form></section>;
+  return <section className="admin-view"><p className="eyebrow">Управление</p><h2>Панель администратора</h2><div className="admin-summary"><div><strong>{data.dishes.length}</strong><span>блюд</span></div><div><strong>{data.staffCount}</strong><span>сотрудников</span></div><div><strong>{menuSections.filter((section) => data.dishes.some((dish) => dish.category === section.id)).length}</strong><span>разделов заполнено</span></div></div><div className="access-summary"><span>✓</span><div><strong>Доступ сотрудников настроен</strong><small>Профили подтверждаются через Telegram</small></div></div><div className="admin-category-scroll">{menuSections.map((section) => <button className={adminCategory === section.id ? 'active' : ''} key={section.id} onClick={() => setAdminCategory(section.id)}>{section.name}<small>{data.dishes.filter((dish) => dish.category === section.id).length}</small></button>)}</div><div className="admin-list-head"><strong>Меню · {categoryName}</strong><button onClick={() => { setEditing(null); setMode('dish'); }}>+ Добавить</button></div><div className="admin-dishes">{categoryDishes.map((dish) => <button key={dish.id} onClick={() => { setEditing(dish); setMode('dish'); }}><span className={`mini-color ${dish.color}`} /><div><strong>{dish.name}</strong><small>{dish.weight ? `${dish.weight} г · ` : ''}{dish.ingredients.length} ингредиентов</small></div><Icon name="edit" /></button>)}{!categoryDishes.length && <div className="admin-empty"><span>＋</span><p>В этом разделе пока нет блюд</p><button onClick={() => { setEditing(null); setMode('dish'); }}>Добавить первое</button></div>}</div>{message && <p className="form-message">{message}</p>}</section>;
+}
+
+export default function Home() {
+  const [user, setUser] = useState<User | null | undefined>(undefined); const [data, setData] = useState<AppData>(emptyData);
+  const [tab, setTab] = useState<Tab>('menu'); const [selectedDish, setSelectedDish] = useState<Dish | null>(null); const [profileOpen, setProfileOpen] = useState(false);
+  async function refresh() { const result = await api<AppData>(); setData(result); setUser(result.user); }
+  async function logout() { await api({ action: 'logout' }); setData(emptyData); setUser(null); setProfileOpen(false); setTab('menu'); }
+  useEffect(() => { window.Telegram?.WebApp?.ready(); window.Telegram?.WebApp?.expand(); refresh().catch(() => { setData(emptyData); setUser(null); }); }, []);
+  if (user === undefined) return <main className="app-shell"><section className="phone-frame loading-frame"><div className="brand-mark pulse">DP</div></section></main>;
+  if (!user) return <JoinScreen onJoin={(joined) => { setUser(joined); refresh(); }} />;
+  const firstName = user.name.split(' ')[0];
+  return <main className="app-shell"><section className="phone-frame">
+    <header className="topbar"><div><p className="eyebrow">Due Passi · Команда</p><h1>{tab === 'admin' ? 'Управление' : `Добрый день, ${firstName}`}</h1></div><button className="avatar" onClick={() => setProfileOpen(true)} aria-label="Профиль">{user.photoUrl ? <img src={user.photoUrl} alt="" /> : firstName.charAt(0).toUpperCase()}</button></header>
+    <div className="content-scroll">{tab === 'menu' && <MenuView dishes={data.dishes} onSelect={setSelectedDish} />}{tab === 'test' && <TestView dishes={data.dishes} user={user} />}{tab === 'book' && <BookView />}{tab === 'admin' && <AdminView data={data} refresh={refresh} />}</div>
+    <nav className="tabbar" aria-label="Основная навигация"><button className={`tab ${tab === 'menu' ? 'active' : ''}`} onClick={() => setTab('menu')}><Icon name="menu" />Меню</button><button className={`tab ${tab === 'test' ? 'active' : ''}`} onClick={() => setTab('test')}><Icon name="test" />Тест</button><button className={`tab ${tab === 'book' ? 'active' : ''}`} onClick={() => setTab('book')}><Icon name="book" />Книга</button>{user.role === 'admin' && <button className={`tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => setTab('admin')}><Icon name="admin" />Админ</button>}</nav>
+    {selectedDish && <DishDetail dish={selectedDish} onClose={() => setSelectedDish(null)} />}
+    {profileOpen && <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setProfileOpen(false)}><section className="profile-sheet"><div className="large-avatar">{user.photoUrl ? <img src={user.photoUrl} alt="" /> : firstName.charAt(0)}</div><h2>{user.name}</h2>{user.username && <span className="profile-username">@{user.username}</span>}<p>{user.role === 'admin' ? 'Администратор' : 'Официант'} · Due Passi</p><button className="secondary-button danger" onClick={logout}>Выйти из профиля</button></section></div>}
+  </section></main>;
+}
