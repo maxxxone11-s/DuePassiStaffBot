@@ -196,11 +196,21 @@ function shuffle<T>(items: T[]) {
   return result;
 }
 
+function testDishName(dish: Dish) {
+  const name = dish.name.trim();
+  if (dish.category === 'pizza' && !/^пицца\b/i.test(name)) return `Пицца «${name}»`;
+  if (dish.category === 'focaccia' && !/^фокачча\b/i.test(name)) return `Фокачча «${name}»`;
+  if (dish.category === 'pasta' && dish.ingredients.includes('ризотто база') && !/^ризотто\b/i.test(name)) return `Ризотто «${name}»`;
+  return name;
+}
+
 function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes: Dish[]; user: User; selectedDishIds: number[]; onClearSelection: () => void }) {
   const [started, setStarted] = useState(false); const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<string[]>([]); const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(false); const [finished, setFinished] = useState(false); const [finalScore, setFinalScore] = useState(0);
   const [questions, setQuestions] = useState<Dish[]>([]);
+  const [requestedQuestionIds, setRequestedQuestionIds] = useState<number[]>([]);
+  const requestedDishes = selectedDishIds.map((id) => dishes.find((dish) => dish.id === id)).filter((dish): dish is Dish => Boolean(dish)).slice(0, 15);
   const options = useMemo(() => {
     const correct = questions[current]?.ingredients ?? [];
     const extras = [...new Set(dishes.flatMap((dish) => dish.ingredients).filter((item) => !correct.includes(item)))];
@@ -209,10 +219,14 @@ function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes:
   const isCorrect = questions[current] && selected.length === questions[current].ingredients.length && selected.every((item) => questions[current].ingredients.includes(item));
 
   function restart() {
-    const requested = selectedDishIds.map((id) => dishes.find((dish) => dish.id === id)).filter((dish): dish is Dish => Boolean(dish)).slice(0, 15);
+    const requested = requestedDishes;
     const requestedIds = new Set(requested.map((dish) => dish.id));
     const randomDishes = shuffle(dishes.filter((dish) => !requestedIds.has(dish.id))).slice(0, Math.max(0, 15 - requested.length));
-    setQuestions(shuffle([...requested, ...randomDishes]));
+    // User-selected dishes go first (in a random order), then random fillers.
+    // This makes the guarantee visible and prevents a selected item from being
+    // mistaken for a missing one while preserving randomness inside both groups.
+    setQuestions([...shuffle(requested), ...randomDishes]);
+    setRequestedQuestionIds([...requestedIds]);
     setStarted(true); setCurrent(0); setSelected([]); setScore(0); setFinalScore(0); setAnswered(false); setFinished(false);
   }
   async function next() {
@@ -223,10 +237,12 @@ function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes:
     else { setCurrent((value) => value + 1); setSelected([]); setAnswered(false); }
   }
 
-  if (!started) return <section className="feature-view"><div className="feature-icon">✓</div><p className="eyebrow center">Проверка знаний</p><h2>Готовы проверить<br />себя?</h2><p>Тест состоит из 15 случайных блюд. Позиции, отмеченные в меню, обязательно войдут в подборку.</p>{selectedDishIds.length > 0 && <div className="selected-test-note"><strong>Выбрано вами: {selectedDishIds.length}</strong><span>Ещё {Math.max(0, 15 - selectedDishIds.length)} добавится случайно</span><button onClick={onClearSelection}>Очистить выбор</button></div>}<div className="test-stats"><div><strong>{Math.min(15, dishes.length)}</strong><span>вопросов</span></div><div><strong>80%</strong><span>проходной балл</span></div></div><button className="primary-button" disabled={!dishes.length} onClick={restart}>Начать тест</button></section>;
+  if (!started) return <section className="feature-view"><div className="feature-icon">✓</div><p className="eyebrow center">Проверка знаний</p><h2>Готовы проверить<br />себя?</h2><p>Тест состоит из 15 блюд. Выбранные позиции будут первыми вопросами в случайном порядке, остальные добавятся случайно.</p>{requestedDishes.length > 0 && <div className="selected-test-note"><strong>Выбрано вами: {requestedDishes.length}</strong><span>Ещё {Math.max(0, 15 - requestedDishes.length)} добавится случайно</span><div className="selected-test-list">{requestedDishes.map((dish) => <i key={dish.id}>{testDishName(dish)}</i>)}</div><button onClick={onClearSelection}>Очистить выбор</button></div>}<div className="test-stats"><div><strong>{Math.min(15, dishes.length)}</strong><span>вопросов</span></div><div><strong>80%</strong><span>проходной балл</span></div></div><button className="primary-button" disabled={!dishes.length} onClick={restart}>Начать тест</button></section>;
   if (finished) return <section className="feature-view result-view"><div className="score-ring"><strong>{Math.round(finalScore / questions.length * 100)}%</strong><span>{finalScore} из {questions.length}</span></div><p className="eyebrow center">Тест завершён</p><h2>{finalScore / questions.length >= .8 ? 'Отличный результат!' : 'Стоит повторить меню'}</h2><p>Результат сохранён в приложении и доступен администратору.</p><button className="primary-button" onClick={restart}>Пройти ещё раз</button></section>;
   const dish = questions[current];
-  return <section className="quiz-view"><div className="quiz-top"><span>Вопрос {current + 1} из {questions.length}</span><strong>{Math.round((current + 1) / questions.length * 100)}%</strong></div><div className="progress"><i style={{ width: `${(current + 1) / questions.length * 100}%` }} /></div><p className="eyebrow">Выберите весь состав</p><h2>{dish.name}</h2><div className="options">{options.map((option) => { const checked = selected.includes(option); const right = dish.ingredients.includes(option); return <button disabled={answered} key={option} className={`${checked ? 'selected' : ''} ${answered && checked ? (right ? 'right' : 'wrong') : ''}`} onClick={() => setSelected(checked ? selected.filter((item) => item !== option) : [...selected, option])}><span>{checked ? '✓' : ''}</span>{option}</button>; })}</div>{answered && <div className={`answer-note ${isCorrect ? 'success' : 'error'}`}><strong>{isCorrect ? 'Верно!' : 'Есть неточности'}</strong><p>{isCorrect ? 'Вы отлично знаете это блюдо.' : `Правильный состав: ${dish.ingredients.join(', ')}.`}</p></div>}<button className="primary-button sticky-action" disabled={!selected.length} onClick={next}>{answered ? (current === questions.length - 1 ? 'Узнать результат' : 'Следующий вопрос') : 'Проверить'}</button></section>;
+  const sectionName = menuSections.find((section) => section.id === dish.category)?.name ?? 'Меню';
+  const requestedQuestion = requestedQuestionIds.includes(dish.id);
+  return <section className="quiz-view"><div className="quiz-top"><span>Вопрос {current + 1} из {questions.length}</span><strong>{Math.round((current + 1) / questions.length * 100)}%</strong></div><div className="progress"><i style={{ width: `${(current + 1) / questions.length * 100}%` }} /></div><p className={`eyebrow question-kind ${requestedQuestion ? 'requested' : ''}`}>{requestedQuestion ? 'Выбрано вами' : 'Случайная позиция'} · {sectionName}</p><h2>{testDishName(dish)}</h2><div className="options">{options.map((option) => { const checked = selected.includes(option); const right = dish.ingredients.includes(option); return <button disabled={answered} key={option} className={`${checked ? 'selected' : ''} ${answered && checked ? (right ? 'right' : 'wrong') : ''}`} onClick={() => setSelected(checked ? selected.filter((item) => item !== option) : [...selected, option])}><span>{checked ? '✓' : ''}</span>{option}</button>; })}</div>{answered && <div className={`answer-note ${isCorrect ? 'success' : 'error'}`}><strong>{isCorrect ? 'Верно!' : 'Есть неточности'}</strong><p>{isCorrect ? 'Вы отлично знаете это блюдо.' : `Правильный состав: ${dish.ingredients.join(', ')}.`}</p></div>}<button className="primary-button sticky-action" disabled={!selected.length} onClick={next}>{answered ? (current === questions.length - 1 ? 'Узнать результат' : 'Следующий вопрос') : 'Проверить'}</button></section>;
 }
 
 function BookView() {
