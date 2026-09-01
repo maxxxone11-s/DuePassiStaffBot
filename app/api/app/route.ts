@@ -24,6 +24,20 @@ type SessionUser = {
   photo_url: string | null;
 };
 
+type StaffMember = {
+  id: number;
+  name: string;
+  role: 'employee' | 'admin';
+  telegram_id: string | null;
+  username: string | null;
+  photo_url: string | null;
+  created_at: string;
+  last_seen_at: string | null;
+  active: number;
+  attempt_count: number;
+  last_attempt_at: string | null;
+};
+
 const runtimeEnv = env as RuntimeEnv;
 const sessionCookie = 'due_passi_session';
 const encoder = new TextEncoder();
@@ -70,7 +84,12 @@ async function getCurrentUser(request: NextRequest): Promise<SessionUser | null>
   const token = request.cookies.get(sessionCookie)?.value;
   if (!token) return null;
   const tokenHash = await sha256(token);
-  return env.DB.prepare('SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url FROM sessions JOIN staff ON staff.id = sessions.staff_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?').bind(tokenHash, new Date().toISOString()).first<SessionUser>();
+  return env.DB.prepare('SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url FROM sessions JOIN staff ON staff.id = sessions.staff_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND staff.active = 1').bind(tokenHash, new Date().toISOString()).first<SessionUser>();
+}
+
+async function getEmployeeAccessCode(isLocal: boolean) {
+  const stored = await env.DB.prepare("SELECT value FROM app_settings WHERE key = 'employee_access_code'").first<{ value: string }>();
+  return stored?.value || runtimeEnv.EMPLOYEE_ACCESS_CODE || process.env.EMPLOYEE_ACCESS_CODE || (isLocal ? '1111' : '');
 }
 
 const legacyCrudoNames = ['Сибас крудо', 'Гребешок крудо', 'Тунец крудо', 'Лосось крудо', 'Дорадо крудо'];
@@ -889,6 +908,7 @@ async function ensureStaffColumns(db: D1Database) {
   if (!columns.has('username')) await db.prepare('ALTER TABLE staff ADD COLUMN username TEXT').run();
   if (!columns.has('photo_url')) await db.prepare('ALTER TABLE staff ADD COLUMN photo_url TEXT').run();
   if (!columns.has('last_seen_at')) await db.prepare('ALTER TABLE staff ADD COLUMN last_seen_at TEXT').run();
+  if (!columns.has('active')) await db.prepare('ALTER TABLE staff ADD COLUMN active INTEGER NOT NULL DEFAULT 1').run();
 }
 
 async function initDb() {
@@ -900,6 +920,7 @@ async function initDb() {
     db.prepare('CREATE TABLE IF NOT EXISTS attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, staff_id INTEGER NOT NULL, score INTEGER NOT NULL, total INTEGER NOT NULL, created_at TEXT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, staff_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS auth_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id TEXT NOT NULL, success INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_attempts_staff_id ON attempts(staff_id)'),
   ]);
   await ensureDishColumns(db);
@@ -1002,9 +1023,21 @@ export async function GET(request: NextRequest) {
   const currentUser = await getCurrentUser(request);
   if (!currentUser) return NextResponse.json({ user: null, dishes: [], invites: [], staffCount: 0 });
   const dishes = await env.DB.prepare('SELECT * FROM dishes WHERE active = 1 ORDER BY id').all();
-  const invites = currentUser.role === 'admin' ? await env.DB.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() : { results: [] };
-  const staffCount = await env.DB.prepare('SELECT COUNT(*) AS count FROM staff').first<{ count: number }>();
-  return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staffCount: staffCount?.count ?? 0 });
+  const isAdmin = currentUser.role === 'admin';
+  const invites = isAdmin ? await env.DB.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() : { results: [] };
+  const staff = isAdmin ? await env.DB.prepare(`
+    SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url,
+      staff.created_at, staff.last_seen_at, staff.active,
+      COUNT(attempts.id) AS attempt_count, MAX(attempts.created_at) AS last_attempt_at
+    FROM staff
+    LEFT JOIN attempts ON attempts.staff_id = staff.id
+    GROUP BY staff.id
+    ORDER BY staff.active DESC, staff.role DESC, COALESCE(staff.last_seen_at, staff.created_at) DESC
+  `).all<StaffMember>() : { results: [] };
+  const staffCount = await env.DB.prepare('SELECT COUNT(*) AS count FROM staff WHERE active = 1').first<{ count: number }>();
+  const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
+  const employeeAccessCode = isAdmin ? await getEmployeeAccessCode(isLocal) : null;
+  return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
 }
 
 export async function POST(request: NextRequest) {
@@ -1016,7 +1049,7 @@ export async function POST(request: NextRequest) {
     const code = String(body.code || '').trim();
     const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
     const botToken = runtimeEnv.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '';
-    const employeeCode = runtimeEnv.EMPLOYEE_ACCESS_CODE || process.env.EMPLOYEE_ACCESS_CODE || (isLocal ? '1111' : '');
+    const employeeCode = await getEmployeeAccessCode(isLocal);
     const adminCode = runtimeEnv.ADMIN_ACCESS_CODE || process.env.ADMIN_ACCESS_CODE || (isLocal ? '8475' : '');
     if (!employeeCode || !adminCode || (!isLocal && !botToken)) return NextResponse.json({ error: 'Вход на сервере ещё не настроен администратором' }, { status: 503 });
 
@@ -1038,7 +1071,8 @@ export async function POST(request: NextRequest) {
     }
 
     const name = [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ');
-    const existingStaff = await env.DB.prepare('SELECT id FROM staff WHERE telegram_id = ?').bind(telegramId).first<{ id: number }>();
+    const existingStaff = await env.DB.prepare('SELECT id, active FROM staff WHERE telegram_id = ?').bind(telegramId).first<{ id: number; active: number }>();
+    if (existingStaff && !existingStaff.active) return NextResponse.json({ error: 'Ваш доступ отключён администратором' }, { status: 403 });
     let staffId = existingStaff?.id;
     if (staffId) {
       await env.DB.prepare('UPDATE staff SET name = ?, role = ?, invite_code = ?, username = ?, photo_url = ?, last_seen_at = ? WHERE id = ?').bind(name, role, role === 'admin' ? 'ADMIN' : 'TEAM', telegramUser.username || null, telegramUser.photo_url || null, now, staffId).run();
@@ -1076,6 +1110,32 @@ export async function POST(request: NextRequest) {
       await env.DB.prepare('INSERT INTO invite_codes (code, label, role, max_uses, used_count, created_at) VALUES (?, ?, ?, 1, 0, ?)').bind(code, String(body.label || 'Новый сотрудник'), String(body.role || 'employee'), new Date().toISOString()).run();
       return NextResponse.json({ ok: true });
     } catch { return NextResponse.json({ error: 'Такой код уже существует' }, { status: 400 }); }
+  }
+
+  if (action === 'updateEmployeeCode') {
+    if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    const code = String(body.code || '').trim();
+    if (!/^\d{4}$/.test(code)) return NextResponse.json({ error: 'Код должен состоять из 4 цифр' }, { status: 400 });
+    const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
+    const adminCode = runtimeEnv.ADMIN_ACCESS_CODE || process.env.ADMIN_ACCESS_CODE || (isLocal ? '8475' : '');
+    if (code === adminCode) return NextResponse.json({ error: 'Код сотрудника не должен совпадать с кодом администратора' }, { status: 400 });
+    const now = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('employee_access_code', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(code, now).run();
+    return NextResponse.json({ ok: true, employeeAccessCode: code });
+  }
+
+  if (action === 'setStaffActive') {
+    if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    const staffId = Number(body.staffId || 0);
+    const active = body.active ? 1 : 0;
+    if (!staffId) return NextResponse.json({ error: 'Сотрудник не найден' }, { status: 400 });
+    if (staffId === currentUser.id) return NextResponse.json({ error: 'Нельзя отключить собственный профиль' }, { status: 400 });
+    const target = await env.DB.prepare('SELECT role FROM staff WHERE id = ?').bind(staffId).first<{ role: string }>();
+    if (!target) return NextResponse.json({ error: 'Сотрудник не найден' }, { status: 404 });
+    if (target.role === 'admin') return NextResponse.json({ error: 'Профиль администратора нельзя отключить здесь' }, { status: 400 });
+    await env.DB.prepare('UPDATE staff SET active = ? WHERE id = ?').bind(active, staffId).run();
+    if (!active) await env.DB.prepare('DELETE FROM sessions WHERE staff_id = ?').bind(staffId).run();
+    return NextResponse.json({ ok: true });
   }
 
   if (action === 'saveDish') {

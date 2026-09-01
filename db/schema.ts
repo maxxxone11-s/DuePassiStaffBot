@@ -34,6 +34,13 @@ export const staff = sqliteTable('staff', {
   username: text('username'),
   photoUrl: text('photo_url'),
   lastSeenAt: text('last_seen_at'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+});
+
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 export const sessions = sqliteTable('sessions', {

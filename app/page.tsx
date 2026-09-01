@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 declare global {
   interface Window {
@@ -15,10 +15,15 @@ type Dish = {
   category: string; weight: number; components: Record<string, string[]>;
 };
 type Invite = { code: string; label: string; role: string; max_uses: number; used_count: number };
-type AppData = { user: User | null; dishes: Dish[]; invites: Invite[]; staffCount: number };
+type StaffMember = {
+  id: number; name: string; role: 'employee' | 'admin'; telegram_id?: string | null;
+  username?: string | null; photo_url?: string | null; created_at: string;
+  last_seen_at?: string | null; active: number; attempt_count: number; last_attempt_at?: string | null;
+};
+type AppData = { user: User | null; dishes: Dish[]; invites: Invite[]; staff: StaffMember[]; staffCount: number; employeeAccessCode: string | null };
 type Tab = 'menu' | 'test' | 'book' | 'admin';
 
-const emptyData: AppData = { user: null, dishes: [], invites: [], staffCount: 0 };
+const emptyData: AppData = { user: null, dishes: [], invites: [], staff: [], staffCount: 0, employeeAccessCode: null };
 
 const menuSections = [
   { id: 'crudo', name: 'Крудо', caption: 'Raw bar', symbol: '◉', tone: 'sea' },
@@ -188,15 +193,49 @@ function TestView({ dishes, user }: { dishes: Dish[]; user: User }) {
 
 function BookView() {
   const bookUrl = '/books/due-passi-hospitality-book.pdf';
+  const readerRef = useRef<HTMLElement>(null);
+  const [book, setBook] = useState<{ title: string; edition: string; pages: string[] } | null>(null);
+  const [page, setPage] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/books/hospitality-book-pages.json')
+      .then((response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить книгу');
+        return response.json() as Promise<{ title: string; edition: string; pages: string[] }>;
+      })
+      .then((result) => setBook(result))
+      .catch(() => setError('Не удалось загрузить текст. PDF по-прежнему доступен по кнопкам выше.'));
+  }, []);
+
+  function changePage(nextPage: number) {
+    if (!book) return;
+    setPage(Math.max(0, Math.min(nextPage, book.pages.length - 1)));
+    requestAnimationFrame(() => readerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
   return <section className="book-reader-view">
     <div className="book-reader-heading"><div><p className="eyebrow">Due Passi · Обучение</p><h2>Книга гостеприимства</h2><span>Сводная редакция · 60 страниц</span></div><a href={bookUrl} target="_blank" rel="noreferrer" aria-label="Открыть книгу отдельно">↗</a></div>
-    <iframe className="pdf-reader" src={`${bookUrl}#view=FitH&toolbar=1&navpanes=0`} title="Книга гостеприимства Due Passi" />
-    <div className="book-reader-actions"><a className="secondary-button" href={bookUrl} target="_blank" rel="noreferrer">Открыть отдельно</a><a className="secondary-button" href={bookUrl} download>Скачать PDF</a></div>
+    <div className="book-reader-actions"><a className="secondary-button" href={bookUrl} download>Скачать PDF</a><a className="secondary-button" href={bookUrl} target="_blank" rel="noreferrer">Открыть отдельно</a></div>
+    <section className="native-book-reader" ref={readerRef} aria-live="polite">
+      {!book && !error && <div className="book-loading"><span className="pulse">DP</span><p>Загружаем текст книги…</p></div>}
+      {error && <div className="book-error"><strong>Текст временно недоступен</strong><p>{error}</p></div>}
+      {book && <>
+        <div className="book-pagination top-pagination">
+          <button onClick={() => changePage(page - 1)} disabled={page === 0} aria-label="Предыдущая страница">‹</button>
+          <label><span>Страница</span><select value={page} onChange={(event) => changePage(Number(event.target.value))}>{book.pages.map((_, index) => <option value={index} key={index}>{index + 1} из {book.pages.length}</option>)}</select></label>
+          <button onClick={() => changePage(page + 1)} disabled={page === book.pages.length - 1} aria-label="Следующая страница">›</button>
+        </div>
+        <article className="book-page"><div className="book-page-number">{String(page + 1).padStart(2, '0')}</div><pre>{book.pages[page]}</pre></article>
+        <div className="book-progress" aria-hidden="true"><i style={{ width: `${(page + 1) / book.pages.length * 100}%` }} /></div>
+        <div className="book-pagination bottom-pagination"><button onClick={() => changePage(page - 1)} disabled={page === 0}>‹ Назад</button><span>{page + 1} / {book.pages.length}</span><button onClick={() => changePage(page + 1)} disabled={page === book.pages.length - 1}>Далее ›</button></div>
+      </>}
+    </section>
   </section>;
 }
 
 function AdminView({ data, refresh }: { data: AppData; refresh: () => Promise<void> }) {
-  const [mode, setMode] = useState<'home' | 'dish'>('home');
+  const [mode, setMode] = useState<'home' | 'dish' | 'staff' | 'access'>('home');
   const [editing, setEditing] = useState<Dish | null>(null); const [message, setMessage] = useState('');
   const [adminCategory, setAdminCategory] = useState('crudo');
   const categoryDishes = data.dishes.filter((dish) => dish.category === adminCategory);
@@ -209,8 +248,31 @@ function AdminView({ data, refresh }: { data: AppData; refresh: () => Promise<vo
     try { await api({ action: 'saveDish', id: editing?.id, name: form.get('name'), short_description: form.get('description'), ingredients: String(form.get('ingredients') || '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean), allergens: String(form.get('allergens') || '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean), service_note: form.get('note'), badge: form.get('badge'), category, weight: Number(form.get('weight') || 0), components, color: editing?.color || (category === 'bruschetta' ? 'terracotta' : 'sage') }); setMessage('Блюдо сохранено'); setAdminCategory(category); setMode('home'); setEditing(null); await refresh(); } catch (err) { setMessage(err instanceof Error ? err.message : 'Ошибка'); }
   }
 
+  async function updateEmployeeCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api({ action: 'updateEmployeeCode', code: form.get('code') });
+      setMessage('Код сотрудников изменён');
+      await refresh();
+    } catch (err) { setMessage(err instanceof Error ? err.message : 'Ошибка'); }
+  }
+
+  async function setStaffActive(staff: StaffMember, active: boolean) {
+    if (!active && !window.confirm(`Исключить сотрудника «${staff.name}»? Он сразу потеряет доступ к приложению.`)) return;
+    try {
+      await api({ action: 'setStaffActive', staffId: staff.id, active });
+      setMessage(active ? 'Доступ сотрудника восстановлен' : 'Сотрудник исключён');
+      await refresh();
+    } catch (err) { setMessage(err instanceof Error ? err.message : 'Ошибка'); }
+  }
+
+  const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : 'не входил';
+
   if (mode === 'dish') return <section className="admin-view"><button className="back-link" onClick={() => { setMode('home'); setEditing(null); }}><Icon name="back" /> Назад</button><p className="eyebrow">Редактор меню</p><h2>{editing ? 'Изменить блюдо' : 'Новое блюдо'}</h2><form className="admin-form" onSubmit={saveDish}><label><span>Раздел меню</span><select name="category" defaultValue={editing?.category || adminCategory}>{menuSections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select></label><label><span>Название</span><input name="name" defaultValue={editing?.name} required /></label><div className="admin-form-row"><label><span>Вес, г</span><input name="weight" type="number" min="0" defaultValue={editing?.weight || ''} placeholder="220" /></label><label><span>Метка</span><input name="badge" defaultValue={editing?.badge} placeholder="Хит" /></label></div><label><span>Короткое описание</span><textarea name="description" defaultValue={editing?.short_description} /></label><label><span>Основной состав через запятую</span><textarea name="ingredients" defaultValue={editing?.ingredients.join(', ')} required /></label><label><span>Вложенные составы</span><textarea className="components-input" name="components" defaultValue={Object.entries(editing?.components || {}).map(([name, items]) => `${name}: ${items.join(', ')}`).join('\n')} placeholder={'крем дайкон: сыр креметте, соус шрирача\nгуакамоле: авокадо, халапеньо'} /><small className="field-help">Каждый соус — с новой строки в формате «название: ингредиенты».</small></label><label><span>Аллергены через запятую</span><input name="allergens" defaultValue={editing?.allergens.join(', ')} /></label><label><span>Подсказка официанту</span><textarea name="note" defaultValue={editing?.service_note} /></label><button className="primary-button">Сохранить блюдо</button></form></section>;
-  return <section className="admin-view"><p className="eyebrow">Управление</p><h2>Панель администратора</h2><div className="admin-summary"><div><strong>{data.dishes.length}</strong><span>блюд</span></div><div><strong>{data.staffCount}</strong><span>сотрудников</span></div><div><strong>{menuSections.filter((section) => data.dishes.some((dish) => dish.category === section.id)).length}</strong><span>разделов заполнено</span></div></div><div className="access-summary"><span>✓</span><div><strong>Доступ сотрудников настроен</strong><small>Профили подтверждаются через Telegram</small></div></div><div className="admin-category-scroll">{menuSections.map((section) => <button className={adminCategory === section.id ? 'active' : ''} key={section.id} onClick={() => setAdminCategory(section.id)}>{section.name}<small>{data.dishes.filter((dish) => dish.category === section.id).length}</small></button>)}</div><div className="admin-list-head"><strong>Меню · {categoryName}</strong><button onClick={() => { setEditing(null); setMode('dish'); }}>+ Добавить</button></div><div className="admin-dishes">{categoryDishes.map((dish) => <button key={dish.id} onClick={() => { setEditing(dish); setMode('dish'); }}><span className={`mini-color ${dish.color}`} /><div><strong>{dish.name}</strong><small>{dish.weight ? `${dish.weight} г · ` : ''}{dish.ingredients.length} ингредиентов</small></div><Icon name="edit" /></button>)}{!categoryDishes.length && <div className="admin-empty"><span>＋</span><p>В этом разделе пока нет блюд</p><button onClick={() => { setEditing(null); setMode('dish'); }}>Добавить первое</button></div>}</div>{message && <p className="form-message">{message}</p>}</section>;
+  if (mode === 'staff') return <section className="admin-view"><button className="back-link" onClick={() => { setMode('home'); setMessage(''); }}><Icon name="back" /> Панель администратора</button><p className="eyebrow">Управление доступом</p><h2>Сотрудники</h2><p className="admin-description">Здесь отображаются все Telegram-профили, которые хотя бы один раз авторизовались в приложении.</p><div className="staff-list">{data.staff.map((staff) => <article className={`staff-card ${staff.active ? '' : 'inactive'}`} key={staff.id}><div className="staff-avatar">{staff.photo_url ? <img src={staff.photo_url} alt="" /> : staff.name.charAt(0).toUpperCase()}</div><div className="staff-info"><div><strong>{staff.name}</strong><span className={`staff-status ${staff.active ? 'active' : ''}`}>{staff.active ? 'Активен' : 'Исключён'}</span></div><small>{staff.role === 'admin' ? 'Администратор' : 'Сотрудник'}{staff.username ? ` · @${staff.username}` : ''}</small><p>Последний вход: {formatDate(staff.last_seen_at)}{staff.attempt_count ? ` · Тестов: ${staff.attempt_count}` : ''}</p></div>{staff.role !== 'admin' && <button className={`staff-toggle ${staff.active ? 'remove' : 'restore'}`} onClick={() => setStaffActive(staff, !staff.active)}>{staff.active ? 'Исключить' : 'Вернуть'}</button>}</article>)}</div>{!data.staff.length && <div className="admin-empty"><span>○</span><p>Пока никто не авторизовывался</p></div>}{message && <p className="form-message">{message}</p>}</section>;
+  if (mode === 'access') return <section className="admin-view"><button className="back-link" onClick={() => { setMode('home'); setMessage(''); }}><Icon name="back" /> Панель администратора</button><p className="eyebrow">Безопасность</p><h2>Код сотрудников</h2><p className="admin-description">Новый код потребуется при следующем входе. Уже открытые сессии сотрудников продолжат работать.</p><form className="admin-form access-code-form" onSubmit={updateEmployeeCode}><label><span>Новый код из 4 цифр</span><input className="code-input" name="code" defaultValue={data.employeeAccessCode || ''} inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} required /></label><button className="primary-button">Сохранить новый код</button></form>{message && <p className="form-message">{message}</p>}</section>;
+  return <section className="admin-view"><p className="eyebrow">Управление</p><h2>Панель администратора</h2><div className="admin-summary"><div><strong>{data.dishes.length}</strong><span>блюд</span></div><button onClick={() => setMode('staff')}><strong>{data.staffCount}</strong><span>сотрудников</span><small>Открыть ›</small></button><div><strong>{menuSections.filter((section) => data.dishes.some((dish) => dish.category === section.id)).length}</strong><span>разделов заполнено</span></div></div><div className="admin-actions"><button className="admin-action" onClick={() => setMode('staff')}><span className="action-icon">◎</span><div><strong>Сотрудники</strong><small>Просмотр и управление доступом</small></div><b>›</b></button><button className="admin-action" onClick={() => setMode('access')}><span className="action-icon">#</span><div><strong>Код сотрудников</strong><small>Текущий код: {data.employeeAccessCode || '—'}</small></div><b>›</b></button></div><div className="admin-category-scroll">{menuSections.map((section) => <button className={adminCategory === section.id ? 'active' : ''} key={section.id} onClick={() => setAdminCategory(section.id)}>{section.name}<small>{data.dishes.filter((dish) => dish.category === section.id).length}</small></button>)}</div><div className="admin-list-head"><strong>Меню · {categoryName}</strong><button onClick={() => { setEditing(null); setMode('dish'); }}>+ Добавить</button></div><div className="admin-dishes">{categoryDishes.map((dish) => <button key={dish.id} onClick={() => { setEditing(dish); setMode('dish'); }}><span className={`mini-color ${dish.color}`} /><div><strong>{dish.name}</strong><small>{dish.weight ? `${dish.weight} г · ` : ''}{dish.ingredients.length} ингредиентов</small></div><Icon name="edit" /></button>)}{!categoryDishes.length && <div className="admin-empty"><span>＋</span><p>В этом разделе пока нет блюд</p><button onClick={() => { setEditing(null); setMode('dish'); }}>Добавить первое</button></div>}</div>{message && <p className="form-message">{message}</p>}</section>;
 }
 
 export default function Home() {
