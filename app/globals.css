@@ -65,6 +65,7 @@ button:disabled { cursor:default; opacity:.55; }
 .search-box input { flex:1; min-width:0; border:0; outline:0; color:var(--ink); font-size:13px; }
 .search-box button { border:0; background:transparent; color:#9aa29e; font-size:19px; }
 .root-search-box { margin:14px 0 0; padding:13px 14px; border-radius:17px; box-shadow:0 7px 20px rgba(25,55,44,.06); }
+.root-search-box,.section-search-box { scroll-margin-top:8px; }
 .search-results-heading { margin-top:22px; }
 .dish-list { width:100%; min-width:0; display:grid; gap:10px; overflow-x:hidden; }
 .pizza-groups { width:100%; min-width:0; display:grid; gap:25px; }

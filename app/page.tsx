@@ -42,6 +42,10 @@ const menuSections = [
   { id: 'desserts', name: 'Десерты', caption: 'Dolce', symbol: '✧', tone: 'berry' },
 ] as const;
 
+function normalizeSearchValue(value: string) {
+  return value.toLocaleLowerCase('ru-RU').replaceAll('ё', 'е').trim();
+}
+
 async function api<T = Record<string, unknown>>(body?: Record<string, unknown>): Promise<T> {
   const response = await fetch('/api/app', body ? {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -122,14 +126,22 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
   const [query, setQuery] = useState('');
   const [rootQuery, setRootQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const rootSearchRef = useRef<HTMLDivElement>(null);
+  const sectionSearchRef = useRef<HTMLDivElement>(null);
   const currentSection = menuSections.find((section) => section.id === sectionId);
   const sectionDishes = currentSection ? dishes.filter((dish) => dish.category === currentSection.id) : [];
-  const filtered = sectionDishes.filter((dish) => `${dish.name} ${dish.ingredients.join(' ')}`.toLowerCase().includes(query.toLowerCase()));
+  const normalizedQuery = normalizeSearchValue(query);
+  const filtered = sectionDishes.filter((dish) => normalizeSearchValue(`${dish.name} ${dish.ingredients.join(' ')}`).includes(normalizedQuery));
   const renderDishList = (items: Dish[]) => <div className="dish-list">{items.map((dish, index) => <button className="dish-card" key={dish.id} onClick={() => onSelect(dish)}><div className={`dish-visual ${dish.color}`}><span>{String(index + 1).padStart(2, '0')}</span><i /></div><div className="dish-copy"><div className="dish-meta"><span className="tag">{dish.badge}</span>{dish.weight > 0 && <span className="weight-chip">{dish.weight} г</span>}</div><h3>{dish.name}</h3><p>{dish.ingredients.slice(0, 4).join(', ')}</p></div><span className="chevron">›</span></button>)}</div>;
-  const normalizedRootQuery = rootQuery.trim().toLocaleLowerCase('ru-RU');
+  const normalizedRootQuery = normalizeSearchValue(rootQuery);
   const rootResults = normalizedRootQuery ? dishes
-    .filter((dish) => `${dish.name} ${dish.ingredients.join(' ')}`.toLocaleLowerCase('ru-RU').includes(normalizedRootQuery))
-    .sort((first, second) => Number(!first.name.toLocaleLowerCase('ru-RU').startsWith(normalizedRootQuery)) - Number(!second.name.toLocaleLowerCase('ru-RU').startsWith(normalizedRootQuery)) || first.name.localeCompare(second.name, 'ru')) : [];
+    .filter((dish) => normalizeSearchValue(`${dish.name} ${dish.ingredients.join(' ')}`).includes(normalizedRootQuery))
+    .sort((first, second) => Number(!normalizeSearchValue(first.name).startsWith(normalizedRootQuery)) - Number(!normalizeSearchValue(second.name).startsWith(normalizedRootQuery)) || first.name.localeCompare(second.name, 'ru')) : [];
+  function liftSearch(ref: { current: HTMLDivElement | null }) {
+    const scroll = () => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(scroll);
+    window.setTimeout(scroll, 320);
+  }
   const tomatoPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => dish.ingredients.includes('соус пицца')) : [];
   const creamyPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => dish.ingredients.some((item) => item === 'сливки' || item.startsWith('сливки '))) : [];
   const otherPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => !tomatoPizza.includes(dish) && !creamyPizza.includes(dish)) : [];
@@ -139,7 +151,7 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
       <p className="intro-kicker">Меню ресторана</p><h2>Изучайте каждое<br />блюдо уверенно.</h2>
       <div className="intro-meta"><span>13 разделов</span><span>≈ 50 блюд</span></div>
     </section>
-    <div className="search-box root-search-box"><Icon name="search" /><input value={rootQuery} onChange={(event) => setRootQuery(event.target.value)} placeholder="Найти блюдо или ингредиент" />{rootQuery && <button onClick={() => setRootQuery('')} aria-label="Очистить поиск">×</button>}</div>
+    <div className="search-box root-search-box" ref={rootSearchRef}><Icon name="search" /><input value={rootQuery} onFocus={() => liftSearch(rootSearchRef)} onChange={(event) => setRootQuery(event.target.value)} placeholder="Найти блюдо или ингредиент" enterKeyHint="search" />{rootQuery && <button onClick={() => setRootQuery('')} aria-label="Очистить поиск">×</button>}</div>
     {normalizedRootQuery ? <>
       <div className="catalog-heading search-results-heading"><div><p className="eyebrow">Быстрый поиск</p><h2>Найденные блюда</h2></div><span>{rootResults.length}</span></div>
       {rootResults.length ? renderDishList(rootResults) : <div className="empty-state"><span>⌕</span><strong>Ничего не найдено</strong><p>Попробуйте написать часть названия</p></div>}
@@ -164,7 +176,7 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
     </div>
     {hasDishes ? <>
       <div className="section-heading compact-heading"><div><p className="eyebrow">Блюда</p><h2>Состав и подача</h2></div><button className="round-action" aria-label="Поиск" onClick={() => setSearchOpen(!searchOpen)}><Icon name="search" /></button></div>
-      {searchOpen && <div className="search-box"><Icon name="search" /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Блюдо или ингредиент" /><button onClick={() => { setQuery(''); setSearchOpen(false); }}>×</button></div>}
+      {searchOpen && <div className="search-box section-search-box" ref={sectionSearchRef}><Icon name="search" /><input autoFocus value={query} onFocus={() => liftSearch(sectionSearchRef)} onChange={(e) => setQuery(e.target.value)} placeholder="Блюдо или ингредиент" enterKeyHint="search" /><button onClick={() => { setQuery(''); setSearchOpen(false); }}>×</button></div>}
       {currentSection.id === 'pizza' ? <div className="pizza-groups">
         {tomatoPizza.length > 0 && <section className="dish-subsection"><div className="dish-group-heading"><span className="base-dot tomato-dot" /><div><strong>Томатная основа</strong><small>{tomatoPizza.length} позиций</small></div></div>{renderDishList(tomatoPizza)}</section>}
         {creamyPizza.length > 0 && <section className="dish-subsection"><div className="dish-group-heading"><span className="base-dot cream-dot" /><div><strong>Сливочная основа</strong><small>{creamyPizza.length} позиций</small></div></div>{renderDishList(creamyPizza)}</section>}
