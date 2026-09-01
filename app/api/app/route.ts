@@ -1021,7 +1021,7 @@ function parseDish(row: Record<string, unknown>) {
 export async function GET(request: NextRequest) {
   await initDb();
   const currentUser = await getCurrentUser(request);
-  if (!currentUser) return NextResponse.json({ user: null, dishes: [], invites: [], staffCount: 0 });
+  if (!currentUser) return NextResponse.json({ user: null, dishes: [], invites: [], staff: [], attempts: [], staffCount: 0, employeeAccessCode: null });
   const dishes = await env.DB.prepare('SELECT * FROM dishes WHERE active = 1 ORDER BY id').all();
   const isAdmin = currentUser.role === 'admin';
   const invites = isAdmin ? await env.DB.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() : { results: [] };
@@ -1034,10 +1034,18 @@ export async function GET(request: NextRequest) {
     GROUP BY staff.id
     ORDER BY staff.active DESC, staff.role DESC, COALESCE(staff.last_seen_at, staff.created_at) DESC
   `).all<StaffMember>() : { results: [] };
+  const attempts = isAdmin ? await env.DB.prepare(`
+    SELECT attempts.id, attempts.staff_id, staff.name AS staff_name,
+      attempts.score, attempts.total, attempts.created_at
+    FROM attempts
+    JOIN staff ON staff.id = attempts.staff_id
+    ORDER BY attempts.created_at DESC
+    LIMIT 200
+  `).all() : { results: [] };
   const staffCount = await env.DB.prepare('SELECT COUNT(*) AS count FROM staff WHERE active = 1').first<{ count: number }>();
   const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
   const employeeAccessCode = isAdmin ? await getEmployeeAccessCode(isLocal) : null;
-  return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
+  return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, attempts: attempts.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
 }
 
 export async function POST(request: NextRequest) {
