@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "due-passi-staffbot",
+  "main": "vinext/server/app-router-entry",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "duepassi-staffbot.ru",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "due-passi-staffbot",
+      "database_id": "070ed326-4305-47b0-923f-d8fb799444ae"
+    }
+  ]
+}
