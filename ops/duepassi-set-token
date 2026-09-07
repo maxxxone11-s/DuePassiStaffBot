@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+environment_file=/etc/duepassi/app.env
+read -rsp 'Вставьте новый токен Telegram-бота: ' token
+printf '\n'
+
+if [[ ! "$token" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
+  echo 'Токен имеет неверный формат.' >&2
+  exit 1
+fi
+
+temporary_file=$(mktemp)
+trap 'rm -f "$temporary_file"' EXIT
+grep -v '^TELEGRAM_BOT_TOKEN=' "$environment_file" > "$temporary_file" || true
+printf 'TELEGRAM_BOT_TOKEN=%s\n' "$token" >> "$temporary_file"
+install -o root -g duepassi -m 0640 "$temporary_file" "$environment_file"
+systemctl restart duepassi
+echo 'Токен сохранён, приложение перезапущено.'

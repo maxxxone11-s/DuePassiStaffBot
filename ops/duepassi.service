@@ -1,0 +1,23 @@
+[Unit]
+Description=Due Passi staff Telegram Mini App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=duepassi
+Group=duepassi
+WorkingDirectory=/opt/duepassi/app
+EnvironmentFile=/etc/duepassi/app.env
+ExecStart=/opt/node22/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/duepassi
+
+[Install]
+WantedBy=multi-user.target

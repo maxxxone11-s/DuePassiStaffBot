@@ -1,0 +1,6 @@
+[Unit]
+Description=Back up the Due Passi SQLite database
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/duepassi-backup

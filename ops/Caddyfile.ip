@@ -1,0 +1,4 @@
+http://135.106.184.78 {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}

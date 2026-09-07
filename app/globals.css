@@ -3,7 +3,7 @@
 :root { --ink:#17201d; --muted:#78817d; --line:#e6ebe8; --surface:#fff; --canvas:#edf1ef; --accent:#14845d; --accent-soft:#e8f5ef; --danger:#d95050; }
 * { box-sizing:border-box; }
 html,body { min-height:100%; }
-body { margin:0; background:var(--canvas); color:var(--ink); font-family:var(--font-geist-sans),-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif; }
+body { margin:0; background:var(--canvas); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","SF Pro Display",Arial,sans-serif; }
 button,input,textarea { font:inherit; }
 button { cursor:pointer; }
 button:disabled { cursor:default; opacity:.55; }
@@ -161,7 +161,7 @@ button:disabled { cursor:default; opacity:.55; }
 .book-pagination label span { color:var(--muted); font-size:9px; }.book-pagination select { border:0; outline:0; background:transparent; color:var(--ink); font-size:10px; font-weight:750; }
 .book-page { position:relative; min-height:500px; overflow:hidden; padding:32px 20px 28px; border:1px solid var(--line); border-radius:20px; background:#fff; box-shadow:0 10px 28px rgba(27,52,43,.07); }
 .book-page-number { position:absolute; top:13px; right:15px; color:#aab1ad; font-size:9px; font-weight:800; letter-spacing:.08em; }
-.book-page pre { max-width:100%; margin:0; overflow:visible; color:#25302c; font:11.5px/1.65 var(--font-geist-sans),-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; white-space:pre-wrap; overflow-wrap:anywhere; }
+.book-page pre { max-width:100%; margin:0; overflow:visible; color:#25302c; font:11.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","SF Pro Text",Arial,sans-serif; white-space:pre-wrap; overflow-wrap:anywhere; }
 .book-progress { height:4px; overflow:hidden; border-radius:99px; background:#e5ebe8; }.book-progress i { display:block; height:100%; border-radius:inherit; background:var(--accent); transition:width .25s ease; }
 .bottom-pagination button { min-width:88px; padding:0 13px; font-size:10px; }.bottom-pagination span { color:var(--muted); font-size:9px; font-weight:750; }
 

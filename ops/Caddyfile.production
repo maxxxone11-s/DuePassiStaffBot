@@ -1,0 +1,13 @@
+http://135.106.184.78 {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+duepassi-staffbot.ru {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+www.duepassi-staffbot.ru {
+	redir https://duepassi-staffbot.ru{uri} permanent
+}

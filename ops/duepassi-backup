@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+database=/var/lib/duepassi/duepassi.sqlite
+backup_dir=/var/backups/duepassi
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+
+install -d -o duepassi -g duepassi -m 0750 "$backup_dir"
+sqlite3 "$database" ".backup '$backup_dir/duepassi-$timestamp.sqlite'"
+chown duepassi:duepassi "$backup_dir/duepassi-$timestamp.sqlite"
+chmod 0600 "$backup_dir/duepassi-$timestamp.sqlite"
+find "$backup_dir" -type f -name 'duepassi-*.sqlite' -mtime +14 -delete

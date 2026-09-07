@@ -1,7 +1,7 @@
-import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
+import { AppDatabase, getDb } from '@/lib/db';
 
-type RuntimeEnv = Cloudflare.Env & {
+type RuntimeEnv = {
   TELEGRAM_BOT_TOKEN?: string;
   EMPLOYEE_ACCESS_CODE?: string;
   ADMIN_ACCESS_CODE?: string;
@@ -38,7 +38,10 @@ type StaffMember = {
   last_attempt_at: string | null;
 };
 
-const runtimeEnv = env as RuntimeEnv;
+export const runtime = 'nodejs';
+
+const runtimeEnv = process.env as RuntimeEnv;
+const db = getDb();
 const sessionCookie = 'due_passi_session';
 const encoder = new TextEncoder();
 
@@ -84,11 +87,11 @@ async function getCurrentUser(request: NextRequest): Promise<SessionUser | null>
   const token = request.cookies.get(sessionCookie)?.value;
   if (!token) return null;
   const tokenHash = await sha256(token);
-  return env.DB.prepare('SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url FROM sessions JOIN staff ON staff.id = sessions.staff_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND staff.active = 1').bind(tokenHash, new Date().toISOString()).first<SessionUser>();
+  return db.prepare('SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url FROM sessions JOIN staff ON staff.id = sessions.staff_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND staff.active = 1').bind(tokenHash, new Date().toISOString()).first<SessionUser>();
 }
 
 async function getEmployeeAccessCode(isLocal: boolean) {
-  const stored = await env.DB.prepare("SELECT value FROM app_settings WHERE key = 'employee_access_code'").first<{ value: string }>();
+  const stored = await db.prepare("SELECT value FROM app_settings WHERE key = 'employee_access_code'").first<{ value: string }>();
   return stored?.value || runtimeEnv.EMPLOYEE_ACCESS_CODE || process.env.EMPLOYEE_ACCESS_CODE || (isLocal ? '1111' : '');
 }
 
@@ -893,7 +896,7 @@ const seedFish = [
   },
 ];
 
-async function ensureDishColumns(db: D1Database) {
+async function ensureDishColumns(db: AppDatabase) {
   const info = await db.prepare('PRAGMA table_info(dishes)').all<{ name: string }>();
   const columns = new Set(info.results.map((column) => column.name));
   if (!columns.has('category')) await db.prepare("ALTER TABLE dishes ADD COLUMN category TEXT NOT NULL DEFAULT 'crudo'").run();
@@ -901,7 +904,7 @@ async function ensureDishColumns(db: D1Database) {
   if (!columns.has('components')) await db.prepare("ALTER TABLE dishes ADD COLUMN components TEXT NOT NULL DEFAULT '{}'").run();
 }
 
-async function ensureStaffColumns(db: D1Database) {
+async function ensureStaffColumns(db: AppDatabase) {
   const info = await db.prepare('PRAGMA table_info(staff)').all<{ name: string }>();
   const columns = new Set(info.results.map((column) => column.name));
   if (!columns.has('telegram_id')) await db.prepare('ALTER TABLE staff ADD COLUMN telegram_id TEXT').run();
@@ -912,7 +915,6 @@ async function ensureStaffColumns(db: D1Database) {
 }
 
 async function initDb() {
-  const db = env.DB;
   await db.batch([
     db.prepare('CREATE TABLE IF NOT EXISTS dishes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, short_description TEXT NOT NULL, ingredients TEXT NOT NULL, allergens TEXT NOT NULL DEFAULT \'[]\', service_note TEXT NOT NULL DEFAULT \'\', badge TEXT NOT NULL DEFAULT \'\', color TEXT NOT NULL DEFAULT \'sage\', category TEXT NOT NULL DEFAULT \'crudo\', weight INTEGER NOT NULL DEFAULT 0, components TEXT NOT NULL DEFAULT \'{}\', active INTEGER NOT NULL DEFAULT 1)'),
     db.prepare('CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'employee\', max_uses INTEGER NOT NULL DEFAULT 1, used_count INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)'),
@@ -1022,10 +1024,10 @@ export async function GET(request: NextRequest) {
   await initDb();
   const currentUser = await getCurrentUser(request);
   if (!currentUser) return NextResponse.json({ user: null, dishes: [], invites: [], staff: [], attempts: [], staffCount: 0, employeeAccessCode: null });
-  const dishes = await env.DB.prepare('SELECT * FROM dishes WHERE active = 1 ORDER BY id').all();
+  const dishes = await db.prepare('SELECT * FROM dishes WHERE active = 1 ORDER BY id').all();
   const isAdmin = currentUser.role === 'admin';
-  const invites = isAdmin ? await env.DB.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() : { results: [] };
-  const staff = isAdmin ? await env.DB.prepare(`
+  const invites = isAdmin ? await db.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() : { results: [] };
+  const staff = isAdmin ? await db.prepare(`
     SELECT staff.id, staff.name, staff.role, staff.telegram_id, staff.username, staff.photo_url,
       staff.created_at, staff.last_seen_at, staff.active,
       COUNT(attempts.id) AS attempt_count, MAX(attempts.created_at) AS last_attempt_at
@@ -1034,7 +1036,7 @@ export async function GET(request: NextRequest) {
     GROUP BY staff.id
     ORDER BY staff.active DESC, staff.role DESC, COALESCE(staff.last_seen_at, staff.created_at) DESC
   `).all<StaffMember>() : { results: [] };
-  const attempts = isAdmin ? await env.DB.prepare(`
+  const attempts = isAdmin ? await db.prepare(`
     SELECT attempts.id, attempts.staff_id, staff.name AS staff_name,
       attempts.score, attempts.total, attempts.created_at
     FROM attempts
@@ -1042,7 +1044,7 @@ export async function GET(request: NextRequest) {
     ORDER BY attempts.created_at DESC
     LIMIT 200
   `).all() : { results: [] };
-  const staffCount = await env.DB.prepare('SELECT COUNT(*) AS count FROM staff WHERE active = 1').first<{ count: number }>();
+  const staffCount = await db.prepare('SELECT COUNT(*) AS count FROM staff WHERE active = 1').first<{ count: number }>();
   const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
   const employeeAccessCode = isAdmin ? await getEmployeeAccessCode(isLocal) : null;
   return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, attempts: attempts.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
@@ -1068,32 +1070,32 @@ export async function POST(request: NextRequest) {
 
     const telegramId = String(telegramUser.id);
     const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const failedAttempts = await env.DB.prepare('SELECT COUNT(*) AS count FROM auth_attempts WHERE telegram_id = ? AND success = 0 AND created_at > ?').bind(telegramId, windowStart).first<{ count: number }>();
+    const failedAttempts = await db.prepare('SELECT COUNT(*) AS count FROM auth_attempts WHERE telegram_id = ? AND success = 0 AND created_at > ?').bind(telegramId, windowStart).first<{ count: number }>();
     if ((failedAttempts?.count ?? 0) >= 10) return NextResponse.json({ error: 'Слишком много попыток. Повторите вход через 15 минут' }, { status: 429 });
 
     const role = code === adminCode ? 'admin' : code === employeeCode ? 'employee' : null;
     const now = new Date().toISOString();
     if (!role) {
-      await env.DB.prepare('INSERT INTO auth_attempts (telegram_id, success, created_at) VALUES (?, 0, ?)').bind(telegramId, now).run();
+      await db.prepare('INSERT INTO auth_attempts (telegram_id, success, created_at) VALUES (?, 0, ?)').bind(telegramId, now).run();
       return NextResponse.json({ error: 'Неверный код доступа' }, { status: 400 });
     }
 
     const name = [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ');
-    const existingStaff = await env.DB.prepare('SELECT id, active FROM staff WHERE telegram_id = ?').bind(telegramId).first<{ id: number; active: number }>();
+    const existingStaff = await db.prepare('SELECT id, active FROM staff WHERE telegram_id = ?').bind(telegramId).first<{ id: number; active: number }>();
     if (existingStaff && !existingStaff.active) return NextResponse.json({ error: 'Ваш доступ отключён администратором' }, { status: 403 });
     let staffId = existingStaff?.id;
     if (staffId) {
-      await env.DB.prepare('UPDATE staff SET name = ?, role = ?, invite_code = ?, username = ?, photo_url = ?, last_seen_at = ? WHERE id = ?').bind(name, role, role === 'admin' ? 'ADMIN' : 'TEAM', telegramUser.username || null, telegramUser.photo_url || null, now, staffId).run();
+      await db.prepare('UPDATE staff SET name = ?, role = ?, invite_code = ?, username = ?, photo_url = ?, last_seen_at = ? WHERE id = ?').bind(name, role, role === 'admin' ? 'ADMIN' : 'TEAM', telegramUser.username || null, telegramUser.photo_url || null, now, staffId).run();
     } else {
-      const result = await env.DB.prepare('INSERT INTO staff (name, role, invite_code, created_at, telegram_id, username, photo_url, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(name, role, role === 'admin' ? 'ADMIN' : 'TEAM', now, telegramId, telegramUser.username || null, telegramUser.photo_url || null, now).run();
+      const result = await db.prepare('INSERT INTO staff (name, role, invite_code, created_at, telegram_id, username, photo_url, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(name, role, role === 'admin' ? 'ADMIN' : 'TEAM', now, telegramId, telegramUser.username || null, telegramUser.photo_url || null, now).run();
       staffId = Number(result.meta.last_row_id);
     }
     if (!staffId) return NextResponse.json({ error: 'Не удалось создать профиль сотрудника.' }, { status: 500 });
-    await env.DB.prepare('DELETE FROM auth_attempts WHERE telegram_id = ?').bind(telegramId).run();
+    await db.prepare('DELETE FROM auth_attempts WHERE telegram_id = ?').bind(telegramId).run();
 
     const sessionToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await env.DB.prepare('INSERT INTO sessions (token_hash, staff_id, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(await sha256(sessionToken), staffId, now, expiresAt.toISOString()).run();
+    await db.prepare('INSERT INTO sessions (token_hash, staff_id, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(await sha256(sessionToken), staffId, now, expiresAt.toISOString()).run();
     const response = NextResponse.json({ user: { id: staffId, name, role, username: telegramUser.username || null, photoUrl: telegramUser.photo_url || null } });
     response.cookies.set(sessionCookie, sessionToken, { httpOnly: true, secure: request.nextUrl.protocol === 'https:', sameSite: 'lax', path: '/', expires: expiresAt });
     return response;
@@ -1101,7 +1103,7 @@ export async function POST(request: NextRequest) {
 
   if (action === 'logout') {
     const token = request.cookies.get(sessionCookie)?.value;
-    if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
+    if (token) await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
     const response = NextResponse.json({ ok: true });
     response.cookies.set(sessionCookie, '', { httpOnly: true, secure: request.nextUrl.protocol === 'https:', sameSite: 'lax', path: '/', maxAge: 0 });
     return response;
@@ -1115,7 +1117,7 @@ export async function POST(request: NextRequest) {
     const code = String(body.code || '').trim().toUpperCase();
     if (code.length < 4) return NextResponse.json({ error: 'Код должен содержать минимум 4 символа' }, { status: 400 });
     try {
-      await env.DB.prepare('INSERT INTO invite_codes (code, label, role, max_uses, used_count, created_at) VALUES (?, ?, ?, 1, 0, ?)').bind(code, String(body.label || 'Новый сотрудник'), String(body.role || 'employee'), new Date().toISOString()).run();
+      await db.prepare('INSERT INTO invite_codes (code, label, role, max_uses, used_count, created_at) VALUES (?, ?, ?, 1, 0, ?)').bind(code, String(body.label || 'Новый сотрудник'), String(body.role || 'employee'), new Date().toISOString()).run();
       return NextResponse.json({ ok: true });
     } catch { return NextResponse.json({ error: 'Такой код уже существует' }, { status: 400 }); }
   }
@@ -1128,7 +1130,7 @@ export async function POST(request: NextRequest) {
     const adminCode = runtimeEnv.ADMIN_ACCESS_CODE || process.env.ADMIN_ACCESS_CODE || (isLocal ? '8475' : '');
     if (code === adminCode) return NextResponse.json({ error: 'Код сотрудника не должен совпадать с кодом администратора' }, { status: 400 });
     const now = new Date().toISOString();
-    await env.DB.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('employee_access_code', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(code, now).run();
+    await db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('employee_access_code', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(code, now).run();
     return NextResponse.json({ ok: true, employeeAccessCode: code });
   }
 
@@ -1138,11 +1140,11 @@ export async function POST(request: NextRequest) {
     const active = body.active ? 1 : 0;
     if (!staffId) return NextResponse.json({ error: 'Сотрудник не найден' }, { status: 400 });
     if (staffId === currentUser.id) return NextResponse.json({ error: 'Нельзя отключить собственный профиль' }, { status: 400 });
-    const target = await env.DB.prepare('SELECT role FROM staff WHERE id = ?').bind(staffId).first<{ role: string }>();
+    const target = await db.prepare('SELECT role FROM staff WHERE id = ?').bind(staffId).first<{ role: string }>();
     if (!target) return NextResponse.json({ error: 'Сотрудник не найден' }, { status: 404 });
     if (target.role === 'admin') return NextResponse.json({ error: 'Профиль администратора нельзя отключить здесь' }, { status: 400 });
-    await env.DB.prepare('UPDATE staff SET active = ? WHERE id = ?').bind(active, staffId).run();
-    if (!active) await env.DB.prepare('DELETE FROM sessions WHERE staff_id = ?').bind(staffId).run();
+    await db.prepare('UPDATE staff SET active = ? WHERE id = ?').bind(active, staffId).run();
+    if (!active) await db.prepare('DELETE FROM sessions WHERE staff_id = ?').bind(staffId).run();
     return NextResponse.json({ ok: true });
   }
 
@@ -1151,13 +1153,13 @@ export async function POST(request: NextRequest) {
     const id = Number(body.id || 0);
     const values = [String(body.name || '').trim(), String(body.short_description || '').trim(), JSON.stringify(body.ingredients || []), JSON.stringify(body.allergens || []), String(body.service_note || ''), String(body.badge || ''), String(body.color || 'sage'), String(body.category || 'crudo'), Number(body.weight || 0), JSON.stringify(body.components || {})];
     if (!values[0]) return NextResponse.json({ error: 'Введите название блюда' }, { status: 400 });
-    if (id) await env.DB.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=? WHERE id=?').bind(...values, id).run();
-    else await env.DB.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values).run();
+    if (id) await db.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=? WHERE id=?').bind(...values, id).run();
+    else await db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values).run();
     return NextResponse.json({ ok: true });
   }
 
   if (action === 'attempt') {
-    await env.DB.prepare('INSERT INTO attempts (staff_id, score, total, created_at) VALUES (?, ?, ?, ?)').bind(currentUser.id, Number(body.score), Number(body.total), new Date().toISOString()).run();
+    await db.prepare('INSERT INTO attempts (staff_id, score, total, created_at) VALUES (?, ?, ?, ?)').bind(currentUser.id, Number(body.score), Number(body.total), new Date().toISOString()).run();
     return NextResponse.json({ ok: true });
   }
 
