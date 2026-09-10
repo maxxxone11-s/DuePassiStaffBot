@@ -110,7 +110,7 @@ function DishDetail({ dish, onClose, selectedForTest, canAddToTest, onToggleTest
     <div className="sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className={`detail-sheet ${dish.photo ? 'has-photo' : ''}`} role="dialog" aria-modal="true" aria-label={dish.name}>
         {dish.photo && <div className="detail-photo">
-          <img src={dish.photo} srcSet={dish.photo === '/dishes/margherita-960.webp' ? '/dishes/margherita-480.webp 480w, /dishes/margherita-960.webp 960w' : undefined} sizes="(max-width: 520px) 100vw, 430px" width={960} height={720} alt={dish.name} decoding="async" />
+          <img src={dish.photo} srcSet={/^\/dishes\/[a-z0-9-]+-960\.webp$/.test(dish.photo) ? `${dish.photo.replace('-960.webp', '-480.webp')} 480w, ${dish.photo} 960w` : undefined} sizes="(max-width: 520px) 100vw, 430px" width={960} height={720} alt={dish.name} decoding="async" />
           <button className="glass-button photo-close" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>
         </div>}
         <div className={`detail-hero ${dish.color}`}>
