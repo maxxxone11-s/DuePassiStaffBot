@@ -29,7 +29,9 @@ function loadSource(file, dependencies = {}) {
 }
 
 const database = loadSource('lib/db.ts');
-const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database });
+const recipes = loadSource('lib/recipes.ts');
+const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
+const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds });
 let route = loadRoute();
 let cookie = '';
 const request = (body) => new NextRequest('http://localhost/api/app', {
@@ -49,7 +51,7 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     cookie = response.headers.get('set-cookie').split(';')[0];
     initial = await get();
     assert.equal(initial.user.role, 'admin');
-    assert.equal(new Set(initial.dishes.map((dish) => dish.category)).size, 13);
+    assert.equal(new Set(initial.dishes.map((dish) => dish.category)).size, 16);
     assert.equal(new Set(initial.dishes.map((dish) => `${dish.category}:${dish.name}`)).size, initial.dishes.length);
   });
 
@@ -94,6 +96,58 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     for (const body of [null, [], 'text']) assert.equal((await post(body)).status, 400);
     const response = await route.POST(new NextRequest('http://localhost/api/app', { method: 'POST', body: '{' }));
     assert.equal(response.status, 400);
+  });
+
+  await t.test('drink migration adds 15 recipes without changing the existing menu', async () => {
+    await database.getDb().prepare("DELETE FROM dishes WHERE category IN ('lemonade', 'milkshakes', 'tea')").run();
+    await database.getDb().prepare("DELETE FROM app_settings WHERE key = 'drinks_seed_v1'").run();
+    const before = await get();
+    route = loadRoute();
+    const after = await get();
+    assert.deepEqual(after.dishes.filter((dish) => !recipes.isDrink(dish.category)), before.dishes);
+    assert.deepEqual(after.staff, before.staff);
+    assert.deepEqual(after.attempts, before.attempts);
+    for (const category of recipes.drinkCategories) {
+      const drinks = after.dishes.filter((dish) => dish.category === category);
+      assert.equal(drinks.length, 5);
+      assert.ok(drinks.every((drink) => recipes.validRecipe(drink.recipe)));
+    }
+  });
+
+  await t.test('photo quantities stay independent for both lemonade volumes', async () => {
+    const drinks = (await get()).dishes;
+    const strawberry = drinks.find((dish) => dish.category === 'lemonade' && dish.name === 'Клубника-лемонграсс');
+    assert.deepEqual(strawberry.recipe.variants.map((v) => v.label), ['0,4 л', '1 л']);
+    assert.deepEqual(strawberry.recipe.variants.map((v) => v.ingredients.map((i) => i.quantity)), [
+      ['25 мл', '20 мл', '15 мл', '30 г', '20 г'],
+      ['35 мл', '40 мл', '20 мл', '70 г', '30 г'],
+    ]);
+    const fruity = drinks.find((dish) => dish.name === 'Фруктовый');
+    assert.equal(fruity.recipe.variants[1].ingredients.find((i) => i.name === 'Фреш лимона').quantity, '15 мл');
+    const oreo = drinks.find((dish) => dish.name === 'Орео');
+    assert.deepEqual(oreo.recipe.variants[0].ingredients.filter((i) => i.name === 'Печенье Орео').map((i) => i.quantity), ['2 шт.', '1 шт.']);
+    const mango = drinks.find((dish) => dish.name === 'Тропический с манго');
+    assert.equal(mango.recipe.variants[0].ingredients.find((i) => i.name === 'Ананас консервированный').quantity, '');
+  });
+
+  await t.test('admin quantity edits and renames survive restart and old clients', async () => {
+    const before = await get();
+    const drink = before.dishes.find((dish) => dish.category === 'lemonade');
+    drink.name = 'Лимонад после правки';
+    drink.recipe.variants[0].ingredients[0].quantity = '26 мл';
+    assert.equal((await post({ action: 'saveDish', ...drink })).status, 200);
+    route = loadRoute();
+    const updated = await get();
+    assert.equal(updated.dishes.length, before.dishes.length);
+    assert.deepEqual(updated.dishes.find((dish) => dish.id === drink.id).recipe, drink.recipe);
+    const legacyEdit = { ...drink };
+    delete legacyEdit.recipe;
+    assert.equal((await post({ action: 'saveDish', ...legacyEdit })).status, 200);
+    assert.deepEqual((await get()).dishes.find((dish) => dish.id === drink.id).recipe, drink.recipe);
+    for (const recipe of [{ variants: [] }, { variants: [null], note: '' }, { variants: [{ label: '1 л', ingredients: [] }], note: '' }]) {
+      assert.equal((await post({ action: 'saveDish', ...drink, recipe })).status, 400);
+    }
+    assert.deepEqual((await get()).dishes.find((dish) => dish.id === drink.id).recipe, drink.recipe);
   });
 
   await t.test('logout invalidates the saved session', async () => {

@@ -1,0 +1,817 @@
+[
+  {
+    "name": "Клубника-лемонграсс",
+    "category": "lemonade",
+    "description": "Клубника, лемонграсс и лимонный фреш",
+    "color": "sage",
+    "badge": "Лимонад",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "0,4 л",
+          "ingredients": [
+            {
+              "name": "Сироп клубничный",
+              "quantity": "25 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп лемонграсс",
+              "quantity": "20 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Клубника с/м",
+              "quantity": "30 г",
+              "note": "В блендер"
+            },
+            {
+              "name": "Клубника с/м",
+              "quantity": "20 г",
+              "note": "Украшение"
+            }
+          ]
+        },
+        {
+          "label": "1 л",
+          "ingredients": [
+            {
+              "name": "Сироп клубничный",
+              "quantity": "35 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп лемонграсс",
+              "quantity": "40 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "20 мл",
+              "note": ""
+            },
+            {
+              "name": "Клубника с/м",
+              "quantity": "70 г",
+              "note": "В блендер"
+            },
+            {
+              "name": "Клубника с/м",
+              "quantity": "30 г",
+              "note": "Украшение"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Щавель-ананас",
+    "category": "lemonade",
+    "description": "Ананасовое пюре, сироп и свежий щавель",
+    "color": "sage",
+    "badge": "Лимонад",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "0,4 л",
+          "ingredients": [
+            {
+              "name": "Пюре ананаса",
+              "quantity": "50 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп ананасовый",
+              "quantity": "20 мл",
+              "note": ""
+            },
+            {
+              "name": "Щавель",
+              "quantity": "4 г",
+              "note": "Размять мадлером"
+            },
+            {
+              "name": "Щавель",
+              "quantity": "2 г",
+              "note": "Украшение"
+            },
+            {
+              "name": "Ананас консервированный",
+              "quantity": "½ кольца",
+              "note": ""
+            }
+          ]
+        },
+        {
+          "label": "1 л",
+          "ingredients": [
+            {
+              "name": "Пюре ананаса",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп ананасовый",
+              "quantity": "50 мл",
+              "note": ""
+            },
+            {
+              "name": "Щавель",
+              "quantity": "7 г",
+              "note": "Размять мадлером"
+            },
+            {
+              "name": "Щавель",
+              "quantity": "3 г",
+              "note": "Украшение"
+            },
+            {
+              "name": "Ананас консервированный",
+              "quantity": "1 кольцо",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Мандариновый",
+    "category": "lemonade",
+    "description": "Мандарин, мандариновый сироп и фреш лимона",
+    "color": "sage",
+    "badge": "Лимонад",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "0,4 л",
+          "ingredients": [
+            {
+              "name": "Сироп мандариновый",
+              "quantity": "30 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "10 мл",
+              "note": ""
+            },
+            {
+              "name": "Мандарин",
+              "quantity": "70 г",
+              "note": "В блендер"
+            },
+            {
+              "name": "Мандарин",
+              "quantity": "30 г",
+              "note": "Украшение"
+            }
+          ]
+        },
+        {
+          "label": "1 л",
+          "ingredients": [
+            {
+              "name": "Сироп мандариновый",
+              "quantity": "65 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "20 мл",
+              "note": ""
+            },
+            {
+              "name": "Мандарин",
+              "quantity": "180 г",
+              "note": "В блендер"
+            },
+            {
+              "name": "Мандарин",
+              "quantity": "70 г",
+              "note": "Украшение"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Малина-маракуйя",
+    "category": "lemonade",
+    "description": "Малина и маракуйя: сиропы, пюре и ягоды",
+    "color": "sage",
+    "badge": "Лимонад",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "0,4 л",
+          "ingredients": [
+            {
+              "name": "Сироп малиновый",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп маракуйя",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Пюре малины",
+              "quantity": "20 г",
+              "note": ""
+            },
+            {
+              "name": "Пюре маракуйи",
+              "quantity": "40 г",
+              "note": ""
+            },
+            {
+              "name": "Малина с/м",
+              "quantity": "50 г",
+              "note": ""
+            }
+          ]
+        },
+        {
+          "label": "1 л",
+          "ingredients": [
+            {
+              "name": "Сироп малиновый",
+              "quantity": "30 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп маракуйя",
+              "quantity": "30 мл",
+              "note": ""
+            },
+            {
+              "name": "Пюре малины",
+              "quantity": "40 г",
+              "note": ""
+            },
+            {
+              "name": "Пюре маракуйи",
+              "quantity": "80 г",
+              "note": ""
+            },
+            {
+              "name": "Малина с/м",
+              "quantity": "100 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Фруктовый",
+    "category": "lemonade",
+    "description": "Яблоко, груша, цитрусы и фруктовые сиропы",
+    "color": "sage",
+    "badge": "Лимонад",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "0,4 л",
+          "ingredients": [
+            {
+              "name": "Сироп ананасовый",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп апельсиновый",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп яблочный",
+              "quantity": "10 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "10 мл",
+              "note": ""
+            },
+            {
+              "name": "Яблоко",
+              "quantity": "10 г",
+              "note": ""
+            },
+            {
+              "name": "Груша",
+              "quantity": "10 г",
+              "note": ""
+            },
+            {
+              "name": "Лимон",
+              "quantity": "10 г",
+              "note": ""
+            },
+            {
+              "name": "Апельсин",
+              "quantity": "10 г",
+              "note": ""
+            }
+          ]
+        },
+        {
+          "label": "1 л",
+          "ingredients": [
+            {
+              "name": "Сироп ананасовый",
+              "quantity": "30 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп апельсиновый",
+              "quantity": "30 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп яблочный",
+              "quantity": "20 мл",
+              "note": ""
+            },
+            {
+              "name": "Фреш лимона",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Яблоко",
+              "quantity": "30 г",
+              "note": ""
+            },
+            {
+              "name": "Груша",
+              "quantity": "30 г",
+              "note": ""
+            },
+            {
+              "name": "Лимон",
+              "quantity": "30 г",
+              "note": ""
+            },
+            {
+              "name": "Апельсин",
+              "quantity": "30 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Банановый",
+    "category": "milkshakes",
+    "description": "Ванильное мороженое, молоко и банан",
+    "color": "coral",
+    "badge": "Милкшейк",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мороженое ванильное",
+              "quantity": "200 г",
+              "note": ""
+            },
+            {
+              "name": "Молоко",
+              "quantity": "100 мл",
+              "note": ""
+            },
+            {
+              "name": "Банан",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сливки взбитые",
+              "quantity": "",
+              "note": "Украшение"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Клубничный",
+    "category": "milkshakes",
+    "description": "Клубничное мороженое, молоко и клубничный сироп",
+    "color": "coral",
+    "badge": "Милкшейк",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мороженое клубничное",
+              "quantity": "200 г",
+              "note": ""
+            },
+            {
+              "name": "Молоко",
+              "quantity": "180 мл",
+              "note": ""
+            },
+            {
+              "name": "Сироп клубничный",
+              "quantity": "15 мл",
+              "note": ""
+            },
+            {
+              "name": "Сливки взбитые",
+              "quantity": "",
+              "note": "Украшение"
+            },
+            {
+              "name": "Клубника с/м",
+              "quantity": "",
+              "note": "Нарезать и выложить на сливки"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Сникерс",
+    "category": "milkshakes",
+    "description": "Шоколадное мороженое, молоко и Сникерс",
+    "color": "coral",
+    "badge": "Милкшейк",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мороженое шоколадное",
+              "quantity": "200 г",
+              "note": ""
+            },
+            {
+              "name": "Молоко",
+              "quantity": "150 мл",
+              "note": ""
+            },
+            {
+              "name": "Сникерс",
+              "quantity": "40 г",
+              "note": ""
+            },
+            {
+              "name": "Сливки взбитые",
+              "quantity": "",
+              "note": "Украшение"
+            },
+            {
+              "name": "Сникерс",
+              "quantity": "",
+              "note": "Кусочки для украшения"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Орео",
+    "category": "milkshakes",
+    "description": "Ванильное мороженое, молоко и печенье Орео",
+    "color": "coral",
+    "badge": "Милкшейк",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мороженое ванильное",
+              "quantity": "200 г",
+              "note": ""
+            },
+            {
+              "name": "Молоко",
+              "quantity": "150 мл",
+              "note": ""
+            },
+            {
+              "name": "Печенье Орео",
+              "quantity": "2 шт.",
+              "note": ""
+            },
+            {
+              "name": "Сливки взбитые",
+              "quantity": "",
+              "note": "Украшение"
+            },
+            {
+              "name": "Печенье Орео",
+              "quantity": "1 шт.",
+              "note": "Разделить на 2 части для украшения"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Твикс",
+    "category": "milkshakes",
+    "description": "Шоколадное мороженое, молоко и Твикс",
+    "color": "coral",
+    "badge": "Милкшейк",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мороженое шоколадное",
+              "quantity": "200 г",
+              "note": ""
+            },
+            {
+              "name": "Молоко",
+              "quantity": "150 мл",
+              "note": ""
+            },
+            {
+              "name": "Твикс",
+              "quantity": "1 палочка",
+              "note": ""
+            },
+            {
+              "name": "Сливки взбитые",
+              "quantity": "",
+              "note": "Украшение"
+            },
+            {
+              "name": "Твикс",
+              "quantity": "",
+              "note": "Кусочки для украшения"
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Облепиха с грушей",
+    "category": "tea",
+    "description": "Ассам, груша, облепиховое пюре и ягоды",
+    "color": "terracotta",
+    "badge": "Авторский чай",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Груша",
+              "quantity": "40 г",
+              "note": ""
+            },
+            {
+              "name": "Пюре облепихи",
+              "quantity": "40 г",
+              "note": ""
+            },
+            {
+              "name": "Облепиха с/м",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп грушевый",
+              "quantity": "25 мл",
+              "note": ""
+            },
+            {
+              "name": "Ассам",
+              "quantity": "3 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Розмарин-ежевика",
+    "category": "tea",
+    "description": "Ассам, розмарин и ежевика",
+    "color": "terracotta",
+    "badge": "Авторский чай",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Розмарин",
+              "quantity": "2 г",
+              "note": ""
+            },
+            {
+              "name": "Ежевика с/м",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп ежевичный",
+              "quantity": "60 мл",
+              "note": ""
+            },
+            {
+              "name": "Ассам",
+              "quantity": "3 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Согревающий",
+    "category": "tea",
+    "description": "Сенча, имбирь, цитрусы и мёд",
+    "color": "terracotta",
+    "badge": "Авторский чай",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Лайм",
+              "quantity": "50 г",
+              "note": ""
+            },
+            {
+              "name": "Имбирь",
+              "quantity": "35 г",
+              "note": ""
+            },
+            {
+              "name": "Лимон",
+              "quantity": "50 г",
+              "note": ""
+            },
+            {
+              "name": "Апельсин",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Мёд",
+              "quantity": "80 г",
+              "note": ""
+            },
+            {
+              "name": "Сенча",
+              "quantity": "3 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Тропический с манго",
+    "category": "tea",
+    "description": "Ассам, манго, ананас, бадьян и гвоздика",
+    "color": "terracotta",
+    "badge": "Авторский чай",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Сироп ананасовый",
+              "quantity": "45 мл",
+              "note": ""
+            },
+            {
+              "name": "Пюре манго",
+              "quantity": "70 г",
+              "note": ""
+            },
+            {
+              "name": "Бадьян",
+              "quantity": "2 г",
+              "note": ""
+            },
+            {
+              "name": "Гвоздика",
+              "quantity": "2 г",
+              "note": ""
+            },
+            {
+              "name": "Ананас консервированный",
+              "quantity": "",
+              "note": ""
+            },
+            {
+              "name": "Ассам",
+              "quantity": "3 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  },
+  {
+    "name": "Смородина-мандарин",
+    "category": "tea",
+    "description": "Ассам, мандарин и смородина",
+    "color": "terracotta",
+    "badge": "Авторский чай",
+    "service_note": "",
+    "recipe": {
+      "variants": [
+        {
+          "label": "Порция",
+          "ingredients": [
+            {
+              "name": "Мандарин",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп мандариновый",
+              "quantity": "35 мл",
+              "note": ""
+            },
+            {
+              "name": "Смородина с/м",
+              "quantity": "100 г",
+              "note": ""
+            },
+            {
+              "name": "Сироп смородина (ежевика)",
+              "quantity": "60 мл",
+              "note": "В карте указаны оба варианта сиропа"
+            },
+            {
+              "name": "Ассам",
+              "quantity": "3 г",
+              "note": ""
+            }
+          ]
+        }
+      ],
+      "note": ""
+    }
+  }
+]

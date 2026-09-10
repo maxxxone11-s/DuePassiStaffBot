@@ -12,6 +12,7 @@ export const dishes = sqliteTable('dishes', {
   category: text('category').notNull().default('crudo'),
   weight: integer('weight').notNull().default(0),
   components: text('components').notNull().default('{}'),
+  recipe: text('recipe').notNull().default('null'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 

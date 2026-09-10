@@ -193,3 +193,23 @@ button:disabled { cursor:default; opacity:.55; }
 @media (hover:hover) { .dish-card:hover,.category-card:hover { transform:translateY(-2px); box-shadow:0 10px 26px rgba(24,55,44,.12); }.admin-dishes>button:hover { border-color:#cddcd5; } }
 @media (max-width:520px) { .app-shell{display:block;padding:0}.phone-frame,.join-frame{width:100%;height:100vh;min-height:620px;border:0;border-radius:0;box-shadow:none}.content-scroll{padding-bottom:calc(105px + env(safe-area-inset-bottom))}.tabbar{bottom:max(10px,env(safe-area-inset-bottom))} }
 @media (max-height:730px) { .join-frame{justify-content:flex-start;overflow-y:auto;padding-top:28px}.feature-view{min-height:520px}.phone-frame{min-height:620px} }
+
+/* Drink preparation cards: amounts remain visible beside each ingredient. */
+.recipe-heading h3 { margin:0 0 18px; font-size:22px; letter-spacing:-.03em; }
+.recipe-volume { display:flex; gap:4px; padding:4px; margin-bottom:18px; border-radius:16px; background:#e7efeb; }
+.recipe-volume button { flex:1; min-height:44px; padding:10px; border:0; border-radius:12px; background:transparent; color:var(--muted); font-size:16px; font-weight:700; transition:background .18s,color .18s; }
+.recipe-volume button[aria-pressed="true"] { background:var(--accent); color:white; box-shadow:0 3px 10px #14845d22; }
+.recipe-table { width:100%; border-collapse:collapse; text-align:left; font-size:16px; }
+.recipe-table thead th { padding:0 0 10px; color:var(--muted); font-size:14px; font-weight:500; }
+.recipe-table th,.recipe-table td { padding:13px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+.recipe-table tbody th { font-weight:500; overflow-wrap:anywhere; }
+.recipe-table th:last-child,.recipe-table td { text-align:right; }
+.recipe-table td { padding-left:14px; white-space:nowrap; font-weight:750; color:var(--accent); }
+.recipe-table small { display:block; margin-top:4px; color:var(--muted); font-size:14px; font-weight:400; line-height:1.4; }
+.recipe-note { font-size:14px; color:var(--muted); line-height:1.5; }
+.recipe-editor { min-width:0; }
+.recipe-editor fieldset { min-width:0; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:16px; }
+.recipe-editor legend { padding:0 6px; font-size:16px; font-weight:700; }
+.recipe-editor input,.recipe-editor textarea { font-size:16px; }
+.recipe-edit-row { display:grid; gap:8px; margin:14px 0; padding:12px 0; border-bottom:1px solid var(--line); }
+.recipe-remove { justify-self:start; padding:6px 0; border:0; color:var(--danger); background:none; font-size:14px; }

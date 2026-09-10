@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppDatabase, getDb } from '@/lib/db';
+import drinkSeeds from '@/data/drinks.json';
+import { isDrink, recipeIngredients, validRecipe } from '@/lib/recipes';
 
 type RuntimeEnv = {
   TELEGRAM_BOT_TOKEN?: string;
@@ -899,6 +901,7 @@ async function ensureDishColumns(db: AppDatabase) {
   const columns = new Set(info.results.map((column) => column.name));
   if (!columns.has('category')) await db.prepare("ALTER TABLE dishes ADD COLUMN category TEXT NOT NULL DEFAULT 'crudo'").run();
   if (!columns.has('weight')) await db.prepare('ALTER TABLE dishes ADD COLUMN weight INTEGER NOT NULL DEFAULT 0').run();
+  if (!columns.has('recipe')) await db.prepare("ALTER TABLE dishes ADD COLUMN recipe TEXT NOT NULL DEFAULT 'null'").run();
   if (!columns.has('components')) await db.prepare("ALTER TABLE dishes ADD COLUMN components TEXT NOT NULL DEFAULT '{}'").run();
 }
 
@@ -972,12 +975,23 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_seed_v1', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  // This additive migration runs once on both existing and new installations.
+  const drinksAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'drinks_seed_v1'").first();
+  if (!drinksAdded) {
+    const statements = drinkSeeds.map((drink) => db.prepare(`INSERT INTO dishes
+      (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components, recipe)
+      SELECT ?, ?, ?, '[]', ?, ?, ?, ?, 0, '{}', ?
+      WHERE NOT EXISTS (SELECT 1 FROM dishes WHERE category = ? AND name = ?)`)
+      .bind(drink.name, drink.description, JSON.stringify(recipeIngredients(drink.recipe)), drink.service_note, drink.badge, drink.color, drink.category, JSON.stringify(drink.recipe), drink.category, drink.name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('drinks_seed_v1', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
 
 function parseDish(row: Record<string, unknown>) {
-  return { ...row, ingredients: JSON.parse(String(row.ingredients || '[]')), allergens: JSON.parse(String(row.allergens || '[]')), components: JSON.parse(String(row.components || '{}')) };
+  return { ...row, recipe: JSON.parse(String(row.recipe || 'null')), ingredients: JSON.parse(String(row.ingredients || '[]')), allergens: JSON.parse(String(row.allergens || '[]')), components: JSON.parse(String(row.components || '{}')) };
 }
 
 export async function GET(request: NextRequest) {
@@ -1118,10 +1132,17 @@ export async function POST(request: NextRequest) {
   if (action === 'saveDish') {
     if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
     const id = Number(body.id || 0);
-    const values = [String(body.name || '').trim(), String(body.short_description || '').trim(), JSON.stringify(body.ingredients || []), JSON.stringify(body.allergens || []), String(body.service_note || ''), String(body.badge || ''), String(body.color || 'sage'), String(body.category || 'crudo'), Number(body.weight || 0), JSON.stringify(body.components || {})];
+    const existing = id ? await db.prepare('SELECT recipe FROM dishes WHERE id = ?').bind(id).first<{ recipe: string }>() : null;
+    if (id && !existing) return NextResponse.json({ error: 'Позиция не найдена' }, { status: 404 });
+    // Preserve recipes when an older admin client edits an existing item.
+    const recipe: unknown = body.recipe === undefined ? JSON.parse(existing?.recipe || 'null') : body.recipe;
+    if (recipe !== null && !validRecipe(recipe)) return NextResponse.json({ error: 'Проверьте состав и объёмы техкарты' }, { status: 400 });
+    if (isDrink(String(body.category)) && !recipe) return NextResponse.json({ error: 'Добавьте состав техкарты напитка' }, { status: 400 });
+    const ingredients = validRecipe(recipe) ? recipeIngredients(recipe) : body.ingredients || [];
+    const values = [String(body.name || '').trim(), String(body.short_description || '').trim(), JSON.stringify(ingredients), JSON.stringify(body.allergens || []), String(body.service_note || ''), String(body.badge || ''), String(body.color || 'sage'), String(body.category || 'crudo'), Number(body.weight || 0), JSON.stringify(body.components || {}), JSON.stringify(recipe)];
     if (!values[0]) return NextResponse.json({ error: 'Введите название блюда' }, { status: 400 });
-    if (id) await db.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=? WHERE id=?').bind(...values, id).run();
-    else await db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values).run();
+    if (id) await db.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=?, recipe=? WHERE id=?').bind(...values, id).run();
+    else await db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values).run();
     return NextResponse.json({ ok: true });
   }
 
