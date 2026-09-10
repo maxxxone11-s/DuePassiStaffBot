@@ -13,7 +13,10 @@
     "build:cloudflare": "vinext build",
     "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "prebuild": "node scripts/check-node.mjs",
+    "prestart": "node scripts/check-node.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@types/better-sqlite3": "^9.6.0",

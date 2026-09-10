@@ -60,7 +60,6 @@ export class AppDatabase {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var duePassiDatabase: AppDatabase | undefined;
 }
 

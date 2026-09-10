@@ -1,10 +1,13 @@
 'use client';
 
+/* Telegram profile photos are remote, user-provided URLs rendered directly. */
+/* eslint-disable @next/next/no-img-element */
+
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 declare global {
   interface Window {
-    Telegram?: { WebApp?: { initData: string; ready: () => void; expand: () => void } };
+    Telegram?: { WebApp?: { initData: string; ready: () => void; expand: () => void; isVersionAtLeast?: (version: string) => boolean; disableVerticalSwipes?: () => void } };
   }
 }
 
@@ -48,7 +51,7 @@ function normalizeSearchValue(value: string) {
 
 async function api<T = Record<string, unknown>>(body?: Record<string, unknown>): Promise<T> {
   const response = await fetch('/api/app', body ? {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   } : undefined);
   const result = await response.json() as { error?: string };
   if (!response.ok) throw new Error(result.error || 'Что-то пошло не так');
@@ -209,6 +212,10 @@ function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes:
   const [selected, setSelected] = useState<string[]>([]); const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(false); const [finished, setFinished] = useState(false); const [finalScore, setFinalScore] = useState(0);
   const [questions, setQuestions] = useState<Dish[]>([]);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
+  const saving = useRef(false);
+  const attemptId = useRef('');
   const [requestedQuestionIds, setRequestedQuestionIds] = useState<number[]>([]);
   const requestedDishes = selectedDishIds.map((id) => dishes.find((dish) => dish.id === id)).filter((dish): dish is Dish => Boolean(dish)).slice(0, 15);
   const options = useMemo(() => {
@@ -219,6 +226,8 @@ function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes:
   const isCorrect = questions[current] && selected.length === questions[current].ingredients.length && selected.every((item) => questions[current].ingredients.includes(item));
 
   function restart() {
+    attemptId.current = crypto.randomUUID();
+    setSaveStatus('idle'); setSaveError('');
     const requested = requestedDishes;
     const requestedIds = new Set(requested.map((dish) => dish.id));
     const randomDishes = shuffle(dishes.filter((dish) => !requestedIds.has(dish.id))).slice(0, Math.max(0, 15 - requested.length));
@@ -229,16 +238,29 @@ function TestView({ dishes, user, selectedDishIds, onClearSelection }: { dishes:
     setRequestedQuestionIds([...requestedIds]);
     setStarted(true); setCurrent(0); setSelected([]); setScore(0); setFinalScore(0); setAnswered(false); setFinished(false);
   }
+  async function saveResult(result: number) {
+    if (saving.current) return;
+    saving.current = true;
+    setSaveStatus('saving'); setSaveError('');
+    try {
+      await api({ action: 'attempt', staffId: user.id, score: result, total: questions.length, requestId: attemptId.current });
+      setSaveStatus('saved');
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveError(error instanceof Error ? error.message : 'Проверьте подключение к интернету');
+    } finally { saving.current = false; }
+  }
+
   async function next() {
     if (!answered) { setAnswered(true); return; }
     const nextScore = score + (isCorrect ? 1 : 0);
     setScore(nextScore);
-    if (current === questions.length - 1) { setFinalScore(nextScore); setFinished(true); await api({ action: 'attempt', staffId: user.id, score: nextScore, total: questions.length }); }
+    if (current === questions.length - 1) { setFinalScore(nextScore); setFinished(true); await saveResult(nextScore); }
     else { setCurrent((value) => value + 1); setSelected([]); setAnswered(false); }
   }
 
   if (!started) return <section className="feature-view"><div className="feature-icon">✓</div><p className="eyebrow center">Проверка знаний</p><h2>Готовы проверить<br />себя?</h2><p>Тест состоит из 15 блюд. Выбранные позиции будут первыми вопросами в случайном порядке, остальные добавятся случайно.</p>{requestedDishes.length > 0 && <div className="selected-test-note"><strong>Выбрано вами: {requestedDishes.length}</strong><span>Ещё {Math.max(0, 15 - requestedDishes.length)} добавится случайно</span><div className="selected-test-list">{requestedDishes.map((dish) => <i key={dish.id}>{testDishName(dish)}</i>)}</div><button onClick={onClearSelection}>Очистить выбор</button></div>}<div className="test-stats"><div><strong>{Math.min(15, dishes.length)}</strong><span>вопросов</span></div><div><strong>80%</strong><span>проходной балл</span></div></div><button className="primary-button" disabled={!dishes.length} onClick={restart}>Начать тест</button></section>;
-  if (finished) return <section className="feature-view result-view"><div className="score-ring"><strong>{Math.round(finalScore / questions.length * 100)}%</strong><span>{finalScore} из {questions.length}</span></div><p className="eyebrow center">Тест завершён</p><h2>{finalScore / questions.length >= .8 ? 'Отличный результат!' : 'Стоит повторить меню'}</h2><p>Результат сохранён в приложении и доступен администратору.</p><button className="primary-button" onClick={restart}>Пройти ещё раз</button></section>;
+  if (finished) return <section className="feature-view result-view"><div className="score-ring"><strong>{Math.round(finalScore / questions.length * 100)}%</strong><span>{finalScore} из {questions.length}</span></div><p className="eyebrow center">Тест завершён</p><h2>{finalScore / questions.length >= .8 ? 'Отличный результат!' : 'Стоит повторить меню'}</h2><div aria-live="polite">{saveStatus === 'saved' ? <p>Результат сохранён в приложении и доступен администратору.</p> : saveStatus === 'error' ? <><p role="alert">Не удалось сохранить результат. {saveError}</p><p>Оставайтесь на этом экране и повторите сохранение.</p><button className="primary-button" onClick={() => void saveResult(finalScore)}>Повторить сохранение</button></> : <p>Сохраняем результат…</p>}</div>{saveStatus === 'saved' && <button className="primary-button" onClick={restart}>Пройти ещё раз</button>}</section>;
   const dish = questions[current];
   const sectionName = menuSections.find((section) => section.id === dish.category)?.name ?? 'Меню';
   const requestedQuestion = requestedQuestionIds.includes(dish.id);
@@ -346,7 +368,19 @@ export default function Home() {
   function toggleTestDish(dishId: number) { setTestDishIds((ids) => ids.includes(dishId) ? ids.filter((id) => id !== dishId) : ids.length < 15 ? [...ids, dishId] : ids); }
   async function refresh() { const result = await api<AppData>(); setData(result); setUser(result.user); }
   async function logout() { await api({ action: 'logout' }); setData(emptyData); setUser(null); setProfileOpen(false); setTab('menu'); }
-  useEffect(() => { window.Telegram?.WebApp?.ready(); window.Telegram?.WebApp?.expand(); refresh().catch(() => { setData(emptyData); setUser(null); }); }, []);
+  useEffect(() => {
+    const webApp = window.Telegram?.WebApp;
+    webApp?.ready();
+    webApp?.expand();
+    if (webApp?.isVersionAtLeast?.('7.7')) webApp.disableVerticalSwipes?.();
+    let cancelled = false;
+    api<AppData>().then((result) => {
+      if (!cancelled) { setData(result); setUser(result.user); }
+    }).catch(() => {
+      if (!cancelled) { setData(emptyData); setUser(null); }
+    });
+    return () => { cancelled = true; };
+  }, []);
   if (user === undefined) return <main className="app-shell"><section className="phone-frame loading-frame"><div className="brand-mark pulse">DP</div></section></main>;
   if (!user) return <JoinScreen onJoin={(joined) => { setUser(joined); refresh(); }} />;
   const firstName = user.name.split(' ')[0];

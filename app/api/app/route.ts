@@ -95,8 +95,6 @@ async function getEmployeeAccessCode(isLocal: boolean) {
   return stored?.value || runtimeEnv.EMPLOYEE_ACCESS_CODE || process.env.EMPLOYEE_ACCESS_CODE || (isLocal ? '1111' : '');
 }
 
-const legacyCrudoNames = ['Сибас крудо', 'Гребешок крудо', 'Тунец крудо', 'Лосось крудо', 'Дорадо крудо'];
-
 const seedCrudo = [
   {
     name: 'Карпаччо из гребешка',
@@ -914,7 +912,17 @@ async function ensureStaffColumns(db: AppDatabase) {
   if (!columns.has('active')) await db.prepare('ALTER TABLE staff ADD COLUMN active INTEGER NOT NULL DEFAULT 1').run();
 }
 
-async function initDb() {
+let initialization: Promise<void> | undefined;
+
+function initDb() {
+  initialization ??= initializeDb().catch((error) => {
+    initialization = undefined;
+    throw error;
+  });
+  return initialization;
+}
+
+async function initializeDb() {
   await db.batch([
     db.prepare('CREATE TABLE IF NOT EXISTS dishes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, short_description TEXT NOT NULL, ingredients TEXT NOT NULL, allergens TEXT NOT NULL DEFAULT \'[]\', service_note TEXT NOT NULL DEFAULT \'\', badge TEXT NOT NULL DEFAULT \'\', color TEXT NOT NULL DEFAULT \'sage\', category TEXT NOT NULL DEFAULT \'crudo\', weight INTEGER NOT NULL DEFAULT 0, components TEXT NOT NULL DEFAULT \'{}\', active INTEGER NOT NULL DEFAULT 1)'),
     db.prepare('CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, label TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'employee\', max_uses INTEGER NOT NULL DEFAULT 1, used_count INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)'),
@@ -935,82 +943,34 @@ async function initDb() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_attempts_telegram_created ON auth_attempts(telegram_id, created_at)'),
   ]);
 
-  await db.batch(legacyCrudoNames.map((name) => db.prepare("DELETE FROM dishes WHERE category = 'crudo' AND name = ?").bind(name)));
-  const crudoRows = await db.prepare("SELECT name FROM dishes WHERE category = 'crudo'").all<{ name: string }>();
-  const existingCrudoNames = new Set(crudoRows.results.map((dish) => dish.name));
-  const missingCrudo = seedCrudo.filter((dish) => !existingCrudoNames.has(dish.name));
-  if (missingCrudo.length) {
-    await db.batch(missingCrudo.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'crudo', 0, JSON.stringify(dish.components))));
+  const attemptColumns = await db.prepare('PRAGMA table_info(attempts)').all<{ name: string }>();
+  if (!attemptColumns.results.some((column) => column.name === 'request_id')) {
+    await db.prepare('ALTER TABLE attempts ADD COLUMN request_id TEXT').run();
   }
-  const bruschettaCount = await db.prepare("SELECT COUNT(*) AS count FROM dishes WHERE category = 'bruschetta'").first<{ count: number }>();
-  if (!bruschettaCount?.count) {
-    await db.batch(seedBruschetta.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'bruschetta', dish.weight, JSON.stringify(dish.components))));
-  }
-  const starterRows = await db.prepare("SELECT name FROM dishes WHERE category = 'starters'").all<{ name: string }>();
-  const existingStarterNames = new Set(starterRows.results.map((dish) => dish.name));
-  const missingStarters = seedStarters.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingStarterNames.has(name)));
-  if (missingStarters.length) {
-    await db.batch(missingStarters.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'starters', 0, JSON.stringify(dish.components))));
-  }
-  const saladRows = await db.prepare("SELECT name FROM dishes WHERE category = 'salads'").all<{ name: string }>();
-  const existingSaladNames = new Set(saladRows.results.map((dish) => dish.name));
-  const missingSalads = seedSalads.filter((dish) => !existingSaladNames.has(dish.name));
-  if (missingSalads.length) {
-    await db.batch(missingSalads.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'salads', 0, JSON.stringify(dish.components))));
-  }
-  const soupRows = await db.prepare("SELECT name FROM dishes WHERE category = 'soups'").all<{ name: string }>();
-  const existingSoupNames = new Set(soupRows.results.map((dish) => dish.name));
-  const missingSoups = seedSoups.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingSoupNames.has(name)));
-  if (missingSoups.length) {
-    await db.batch(missingSoups.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'soups', 0, JSON.stringify(dish.components))));
-  }
-  const healthyRows = await db.prepare("SELECT name FROM dishes WHERE category = 'healthy'").all<{ name: string }>();
-  const existingHealthyNames = new Set(healthyRows.results.map((dish) => dish.name));
-  const missingHealthy = seedHealthy.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingHealthyNames.has(name)));
-  if (missingHealthy.length) {
-    await db.batch(missingHealthy.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'healthy', 0, JSON.stringify(dish.components))));
-  }
-  const pastaRows = await db.prepare("SELECT name FROM dishes WHERE category = 'pasta'").all<{ name: string }>();
-  const existingPastaNames = new Set(pastaRows.results.map((dish) => dish.name));
-  const missingPasta = seedPasta.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingPastaNames.has(name)));
-  if (missingPasta.length) {
-    await db.batch(missingPasta.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'pasta', 0, JSON.stringify(dish.components))));
-  }
-  const pizzaRows = await db.prepare("SELECT name FROM dishes WHERE category = 'pizza'").all<{ name: string }>();
-  const existingPizzaNames = new Set(pizzaRows.results.map((dish) => dish.name));
-  const missingPizza = seedPizza.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingPizzaNames.has(name)));
-  if (missingPizza.length) {
-    await db.batch(missingPizza.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'pizza', 0, JSON.stringify(dish.components))));
-  }
-  const focacciaRows = await db.prepare("SELECT name FROM dishes WHERE category = 'focaccia'").all<{ name: string }>();
-  const existingFocacciaNames = new Set(focacciaRows.results.map((dish) => dish.name));
-  const missingFocaccia = seedFocaccia.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingFocacciaNames.has(name)));
-  if (missingFocaccia.length) {
-    await db.batch(missingFocaccia.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'focaccia', 0, JSON.stringify(dish.components))));
-  }
-  const meatRows = await db.prepare("SELECT name FROM dishes WHERE category = 'meat'").all<{ name: string }>();
-  const existingMeatNames = new Set(meatRows.results.map((dish) => dish.name));
-  const missingMeat = seedMeat.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingMeatNames.has(name)));
-  if (missingMeat.length) {
-    await db.batch(missingMeat.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'meat', 0, JSON.stringify(dish.components))));
-  }
-  const sideRows = await db.prepare("SELECT name FROM dishes WHERE category = 'sides'").all<{ name: string }>();
-  const existingSideNames = new Set(sideRows.results.map((dish) => dish.name));
-  const missingSides = seedSides.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingSideNames.has(name)));
-  if (missingSides.length) {
-    await db.batch(missingSides.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'sides', 0, JSON.stringify(dish.components))));
-  }
-  const dessertRows = await db.prepare("SELECT name FROM dishes WHERE category = 'desserts'").all<{ name: string }>();
-  const existingDessertNames = new Set(dessertRows.results.map((dish) => dish.name));
-  const missingDesserts = seedDesserts.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingDessertNames.has(name)));
-  if (missingDesserts.length) {
-    await db.batch(missingDesserts.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'desserts', 0, JSON.stringify(dish.components))));
-  }
-  const fishRows = await db.prepare("SELECT name FROM dishes WHERE category = 'fish'").all<{ name: string }>();
-  const existingFishNames = new Set(fishRows.results.map((dish) => dish.name));
-  const missingFish = seedFish.filter((dish) => ![dish.name, ...dish.aliases].some((name) => existingFishNames.has(name)));
-  if (missingFish.length) {
-    await db.batch(missingFish.map((dish) => db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, 'fish', 0, JSON.stringify(dish.components))));
+  await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_attempts_request ON attempts(staff_id, request_id)').run();
+
+  // Existing installations own their menu. Never restore renamed dishes or delete
+  // administrator-created dishes based on their names during startup.
+  const seeded = await db.prepare("SELECT value FROM app_settings WHERE key = 'menu_seed_v1'").first();
+  if (!seeded) {
+    const count = await db.prepare('SELECT COUNT(*) AS count FROM dishes').first<{ count: number }>();
+    const statements = [];
+    if (!count?.count) {
+      const categories = [
+        ['crudo', seedCrudo], ['bruschetta', seedBruschetta], ['starters', seedStarters],
+        ['salads', seedSalads], ['soups', seedSoups], ['healthy', seedHealthy],
+        ['pasta', seedPasta], ['pizza', seedPizza], ['focaccia', seedFocaccia],
+        ['meat', seedMeat], ['sides', seedSides], ['desserts', seedDesserts], ['fish', seedFish],
+      ] as const;
+      for (const [category, dishes] of categories) {
+        for (const dish of dishes) {
+          statements.push(db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .bind(dish.name, dish.description, JSON.stringify(dish.ingredients), JSON.stringify(dish.allergens), dish.note, dish.badge, dish.color, category, 'weight' in dish ? dish.weight : 0, JSON.stringify(dish.components)));
+        }
+      }
+    }
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_seed_v1', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
   }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
@@ -1052,7 +1012,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   await initDb();
-  const body = await request.json() as Record<string, unknown>;
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid body');
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: 'Некорректный запрос' }, { status: 400 });
+  }
   const action = String(body.action || '');
 
   if (action === 'join') {
@@ -1159,7 +1126,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'attempt') {
-    await db.prepare('INSERT INTO attempts (staff_id, score, total, created_at) VALUES (?, ?, ?, ?)').bind(currentUser.id, Number(body.score), Number(body.total), new Date().toISOString()).run();
+    const { score, total, requestId } = body;
+    if (typeof score !== 'number' || typeof total !== 'number' || !Number.isInteger(score) || !Number.isInteger(total) || total < 1 || total > 15 || score < 0 || score > total) {
+      return NextResponse.json({ error: 'Некорректный результат теста' }, { status: 400 });
+    }
+    // Older open clients may omit requestId; keep them working during rollout.
+    if (requestId !== undefined && (typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId))) {
+      return NextResponse.json({ error: 'Некорректный идентификатор теста' }, { status: 400 });
+    }
+    await db.prepare('INSERT INTO attempts (staff_id, score, total, created_at, request_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(staff_id, request_id) DO NOTHING')
+      .bind(currentUser.id, score, total, new Date().toISOString(), requestId ?? null).run();
     return NextResponse.json({ ok: true });
   }
 
