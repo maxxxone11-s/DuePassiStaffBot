@@ -901,6 +901,7 @@ async function ensureDishColumns(db: AppDatabase) {
   const columns = new Set(info.results.map((column) => column.name));
   if (!columns.has('category')) await db.prepare("ALTER TABLE dishes ADD COLUMN category TEXT NOT NULL DEFAULT 'crudo'").run();
   if (!columns.has('weight')) await db.prepare('ALTER TABLE dishes ADD COLUMN weight INTEGER NOT NULL DEFAULT 0').run();
+  if (!columns.has('photo')) await db.prepare("ALTER TABLE dishes ADD COLUMN photo TEXT").run();
   if (!columns.has('recipe')) await db.prepare("ALTER TABLE dishes ADD COLUMN recipe TEXT NOT NULL DEFAULT 'null'").run();
   if (!columns.has('components')) await db.prepare("ALTER TABLE dishes ADD COLUMN components TEXT NOT NULL DEFAULT '{}'").run();
 }
@@ -1006,6 +1007,13 @@ async function initializeDb() {
     }
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('remove_syrup_note_v1', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
+  }
+  const photoAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'margherita_photo_v1'").first();
+  if (!photoAdded) {
+    await db.batch([
+      db.prepare("UPDATE dishes SET photo = '/dishes/margherita-960.webp' WHERE category = 'pizza' AND name = 'Маргарита' AND photo IS NULL"),
+      db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('margherita_photo_v1', '1', ?)").bind(new Date().toISOString()),
+    ]);
   }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();

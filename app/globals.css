@@ -229,3 +229,14 @@ input,textarea,select { min-width:0; max-width:100%; }
   .join-frame { overflow-y:auto; }
   .content-scroll { overscroll-behavior-y:contain; }
 }
+
+.detail-photo { position:relative; background:#e7ebe8; aspect-ratio:4/3; }
+.detail-photo img { display:block; width:100%; height:100%; object-fit:cover; }
+.detail-photo .photo-close { position:absolute; top:16px; right:16px; background:rgba(15,24,20,.78); color:#fff; }
+.has-photo .detail-hero { min-height:0; padding:20px 21px 23px; background:#f9fbfa; color:var(--ink); }
+.has-photo .detail-hero:after { display:none; }
+.has-photo .detail-number { position:static; margin-bottom:12px; color:var(--muted); }
+.has-photo .light-tag { display:none; }
+.has-photo .detail-hero h2 { font-size:28px; }
+.has-photo .detail-hero p { max-width:none; color:#5d6c64; font-size:14px; line-height:1.5; }
+.has-photo .detail-body { padding-top:4px; }

@@ -17,7 +17,7 @@ type User = { id: number; name: string; role: 'employee' | 'admin'; username?: s
 type Dish = {
   id: number; name: string; short_description: string; ingredients: string[];
   allergens: string[]; service_note: string; badge: string; color: string;
-  category: string; weight: number; recipe?: Recipe | null; components: Record<string, string[]>;
+  category: string; weight: number; photo?: string | null; recipe?: Recipe | null; components: Record<string, string[]>;
 };
 type Invite = { code: string; label: string; role: string; max_uses: number; used_count: number };
 type StaffMember = {
@@ -108,9 +108,14 @@ function DishDetail({ dish, onClose, selectedForTest, canAddToTest, onToggleTest
   const compoundIngredients = dish.ingredients.filter((item) => dish.components?.[item]?.length);
   return (
     <div className="sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="detail-sheet" role="dialog" aria-modal="true" aria-label={dish.name}>
+      <section className={`detail-sheet ${dish.photo ? 'has-photo' : ''}`} role="dialog" aria-modal="true" aria-label={dish.name}>
+        {dish.photo && <div className="detail-photo">
+          <img src={dish.photo} srcSet={dish.photo === '/dishes/margherita-960.webp' ? '/dishes/margherita-480.webp 480w, /dishes/margherita-960.webp 960w' : undefined} sizes="(max-width: 520px) 100vw, 430px" width={960} height={720} alt={dish.name} decoding="async" />
+          <button className="glass-button photo-close" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>
+        </div>}
         <div className={`detail-hero ${dish.color}`}>
-          <button className="glass-button" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>
+
+          {!dish.photo && <button className="glass-button" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>}
           <span className="detail-number">{sectionName} · {dish.recipe ? 'Техкарта' : dish.weight ? `${dish.weight} г` : String(dish.id).padStart(2, '0')}</span>
           <div><span className="light-tag">{dish.badge}</span><h2>{dish.name}</h2><p>{dish.short_description}</p></div>
         </div>
