@@ -986,6 +986,27 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('drinks_seed_v1', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  const syrupNoteRemoved = await db.prepare("SELECT value FROM app_settings WHERE key = 'remove_syrup_note_v1'").first();
+  if (!syrupNoteRemoved) {
+    const teas = await db.prepare("SELECT id, recipe FROM dishes WHERE category = 'tea'").all<{ id: number; recipe: string }>();
+    const statements = [];
+    for (const tea of teas.results) {
+      const recipe: unknown = JSON.parse(tea.recipe);
+      if (!validRecipe(recipe)) continue;
+      let changed = false;
+      for (const variant of recipe.variants) {
+        for (const ingredient of variant.ingredients) {
+          if (ingredient.name === 'Сироп смородина (ежевика)' && ingredient.note === 'В карте указаны оба варианта сиропа') {
+            ingredient.note = '';
+            changed = true;
+          }
+        }
+      }
+      if (changed) statements.push(db.prepare('UPDATE dishes SET recipe = ? WHERE id = ?').bind(JSON.stringify(recipe), tea.id));
+    }
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('remove_syrup_note_v1', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }

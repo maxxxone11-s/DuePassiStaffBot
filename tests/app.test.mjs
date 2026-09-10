@@ -150,6 +150,22 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     assert.deepEqual((await get()).dishes.find((dish) => dish.id === drink.id).recipe, drink.recipe);
   });
 
+  await t.test('obsolete syrup note is removed without overwriting edited quantities', async () => {
+    const tea = (await get()).dishes.find((dish) => dish.name === 'Смородина-мандарин');
+    const syrup = tea.recipe.variants[0].ingredients.find((item) => item.name === 'Сироп смородина (ежевика)');
+    syrup.quantity = '65 мл';
+    syrup.note = 'В карте указаны оба варианта сиропа';
+    tea.recipe.note = 'Сохранить примечание администратора';
+    assert.equal((await post({ action: 'saveDish', ...tea })).status, 200);
+    await database.getDb().prepare("DELETE FROM app_settings WHERE key = 'remove_syrup_note_v1'").run();
+    route = loadRoute();
+    const updated = (await get()).dishes.find((dish) => dish.id === tea.id);
+    syrup.note = '';
+    assert.deepEqual(updated.recipe, tea.recipe);
+    route = loadRoute();
+    assert.deepEqual((await get()).dishes.find((dish) => dish.id === tea.id).recipe, tea.recipe);
+  });
+
   await t.test('logout invalidates the saved session', async () => {
     assert.equal((await post({ action: 'logout' })).status, 200);
     assert.equal((await get()).user, null);
