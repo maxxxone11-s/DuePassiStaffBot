@@ -1049,6 +1049,17 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('pasta_photos_v4', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  const morePhotosAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'menu_photos_v5'").first();
+  if (!morePhotosAdded) {
+    const photos = [
+      ['fish', 'Лосось с соусом фенхель и юдзу', 'salmon-fennel'],
+      ['soups', 'Качукко', 'cacciucco'],
+      ['meat', 'Бургер «Due Passi»', 'duepassi-burger'],
+    ];
+    const statements = photos.map(([category, name, slug]) => db.prepare('UPDATE dishes SET photo = ? WHERE category = ? AND name = ? AND photo IS NULL').bind(`/dishes/${slug}-960.webp`, category, name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_v5', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
