@@ -37,12 +37,13 @@ test('sauce allergens follow nested ingredients without inheriting dish allergen
     { id: 3, name: 'Другое', category: 'meat', ingredients: ['соус рисовый'], components: { 'соус рисовый': ['рисовая мука', 'мука кукурузная'] } },
   ]);
   const sauce = sauces.find(s => s.name === 'Соус тестовый');
-  assert.deepEqual(new Set(sauce.allergens), new Set(['глютен', 'молочные продукты', 'кедровый орех', 'соя', 'кунжут', 'сельдерей']));
+  assert.deepEqual(new Set(sauce.allergens), new Set(['глютен', 'молочные продукты', 'кедровый орех', 'соя']));
   assert.ok(!sauce.allergens.includes('рыба'));
-  assert.ok(sauce.service_note.includes('всех показанных вариантов'));
+  assert.equal(sauce.service_note, '');
+  assert.equal(sauce.recipe, null);
   assert.deepEqual(sauces.find(s => s.name === 'Соус рисовый').allergens, []);
 });
-test('sauce catalog deduplicates aliases, preserves variants and follows nested uses', () => {
+test('sauce catalog deduplicates aliases, selects one existing composition and follows nested uses', () => {
   const dishes = [
     { id: 1, name: 'Первое блюдо', category: 'meat', ingredients: ['заправка азия'], components: { 'заправка азия': ['соевый соус', 'кунжут'] } },
     { id: 2, name: 'Второе блюдо', category: 'fish', ingredients: ['соус азия'], components: { 'соус азия': ['кунжут', 'соевый соус'] } },
@@ -52,7 +53,8 @@ test('sauce catalog deduplicates aliases, preserves variants and follows nested 
   const sauces = buildSauces(dishes);
   assert.equal(sauces.length, 2);
   const asia = sauces.find(s => s.name === 'Соус азия');
-  assert.equal(asia.recipe.variants.length, 2);
+  assert.equal(asia.recipe, null);
+  assert.deepEqual(asia.ingredients, ['соевый соус', 'кунжут']);
   assert.equal(asia.used_in.length, 3);
   assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').used_in, ['Второе блюдо', 'Первое блюдо']);
   assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').ingredients, []);

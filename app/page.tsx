@@ -18,7 +18,7 @@ type User = { id: number; name: string; role: 'employee' | 'admin'; username?: s
 type Dish = {
   id: number; name: string; short_description: string; ingredients: string[];
   allergens: string[]; service_note: string; badge: string; color: string;
-  used_in?: string[]; sauce_sources?: string[]; category: string; weight: number; photo?: string | null; recipe?: Recipe | null; components: Record<string, string[]>;
+  used_in?: string[]; category: string; weight: number; photo?: string | null; recipe?: Recipe | null; components: Record<string, string[]>;
 };
 type Invite = { code: string; label: string; role: string; max_uses: number; used_count: number };
 type StaffMember = {
@@ -122,13 +122,13 @@ function DishDetail({ dish, onClose, selectedForTest, canAddToTest, onToggleTest
           <div><span className="light-tag">{dish.badge}</span><h2>{dish.name}</h2><p>{dish.short_description}</p></div>
         </div>
         <div className="detail-body">
-          {dish.category === 'sauces' && dish.recipe ? <div>{dish.recipe.variants.map((variant, i) => <div key={variant.label}><p className="eyebrow">{variant.label}</p><div className="ingredient-cloud">{variant.ingredients.map(item => <span key={item.name}>{item.name}</span>)}</div><p className="sauce-usage">{dish.sauce_sources?.[i]}</p></div>)}</div> : dish.recipe ? <RecipeCard key={dish.id} recipe={dish.recipe} /> : <><p className="eyebrow">Основа и дополнения</p>
-          {dish.category === 'sauces' && !dish.ingredients.length && <p className="field-help">Полный состав пока не указан в техкартах.</p>}
+          {dish.recipe ? <RecipeCard key={dish.id} recipe={dish.recipe} /> : <><p className="eyebrow">{dish.category === 'sauces' ? 'Состав' : 'Основа и дополнения'}</p>
+          
           <div className="ingredient-cloud">{baseIngredients.map((item) => <span key={item}>{item}</span>)}</div>
           {compoundIngredients.length > 0 && <><p className="eyebrow ingredient-subtitle">Соусы и составные компоненты</p><div className="ingredient-cloud compound-cloud">{compoundIngredients.map((item) => <button className="nested-ingredient" key={item} onClick={() => setComponentName(item)}>{item}<small>нажмите, чтобы открыть состав</small><b>›</b></button>)}</div></>}
-          </>}{dish.service_note && <div className="info-block"><span className="info-symbol">!</span><div><strong>{dish.recipe ? 'Приготовление и подача' : 'Важно для гостя'}</strong><p>{dish.service_note}</p></div></div>}
-          <div className="allergen-row"><span>Аллергены</span><strong>{dish.allergens.join(', ') || 'не указаны — уточнить состав'}</strong></div>
-          <p className="field-help">Список составлен по доступной техкарте. При аллергии у гостя уточните состав и возможный перекрёстный контакт на кухне.</p>
+          </>}{dish.category !== 'sauces' && dish.service_note && <div className="info-block"><span className="info-symbol">!</span><div><strong>{dish.recipe ? 'Приготовление и подача' : 'Важно для гостя'}</strong><p>{dish.service_note}</p></div></div>}
+          <div className="allergen-row"><span>Аллергены</span><strong>{dish.allergens.join(', ') || (dish.category === 'sauces' ? 'не указаны' : 'не указаны — уточнить состав')}</strong></div>
+          {dish.category !== 'sauces' && <p className="field-help">Список составлен по доступной техкарте. При аллергии у гостя уточните состав и возможный перекрёстный контакт на кухне.</p>}
           {dish.weight > 0 && <div className="weight-row"><span>Выход блюда</span><strong>{dish.weight} г</strong></div>}
           {dish.used_in && <p className="sauce-usage"><span>Используется в блюдах:</span>{dish.used_in.join(' · ')}</p>}
           {!isDrink(dish.category) && dish.category !== 'sauces' && <button className={`test-picker-button ${selectedForTest ? 'selected' : ''}`} disabled={!selectedForTest && !canAddToTest} onClick={onToggleTest}><span>{selectedForTest ? '✓' : '+'}</span><div><strong>{selectedForTest ? 'Добавлено в тест' : 'Добавить в тест'}</strong><small>{selectedForTest ? 'Нажмите, чтобы убрать позицию' : canAddToTest ? 'Позиция гарантированно попадёт в следующий тест' : 'Можно выбрать не более 15 позиций'}</small></div></button>}
