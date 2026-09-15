@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppDatabase, getDb } from '@/lib/db';
 import drinkSeeds from '@/data/drinks.json';
+import allergenReview from '@/data/allergen-review-2026-09-15.json';
 import { isDrink, recipeIngredients, validRecipe } from '@/lib/recipes';
 
 type RuntimeEnv = {
@@ -1068,6 +1069,15 @@ async function initializeDb() {
     ];
     const statements = photos.map(([name, slug]) => db.prepare("UPDATE dishes SET photo = ? WHERE category = 'desserts' AND name = ? AND photo IS NULL").bind(`/dishes/${slug}-960.webp`, name));
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('dessert_photos_v6', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
+  const allergensReviewed = await db.prepare("SELECT value FROM app_settings WHERE key = 'allergen_review_20260915'").first();
+  if (!allergensReviewed) {
+    const statements = allergenReview.map((item) => db.prepare('UPDATE dishes SET allergens = ?, service_note = ? WHERE name = ? AND category = ? AND ingredients = ? AND components = ? AND recipe IS ? AND allergens = ? AND service_note = ?').bind(
+      JSON.stringify(item.allergens), item.service_note, item.name, item.category,
+      item.ingredients, item.components, item.recipe, item.beforeAllergens, item.beforeNote,
+    ));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('allergen_review_20260915', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();

@@ -31,7 +31,8 @@ function loadSource(file, dependencies = {}) {
 const database = loadSource('lib/db.ts');
 const recipes = loadSource('lib/recipes.ts');
 const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
-const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds });
+const allergenReview = JSON.parse(readFileSync(join(root, 'data/allergen-review-2026-09-15.json'), 'utf8'));
+const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds, '@/data/allergen-review-2026-09-15.json': allergenReview });
 let route = loadRoute();
 let cookie = '';
 const request = (body) => new NextRequest('http://localhost/api/app', {
@@ -164,6 +165,24 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     assert.deepEqual(updated.recipe, tea.recipe);
     route = loadRoute();
     assert.deepEqual((await get()).dishes.find((dish) => dish.id === tea.id).recipe, tea.recipe);
+  });
+
+  await t.test('allergen audit updates matching recipes once and preserves changed compositions', async () => {
+    const db = database.getDb();
+    const targets = allergenReview.filter((r) => ['Банановый', 'Ризотто с морепродуктами', 'Ригатони с креветками'].includes(r.name));
+    for (const row of targets) {
+      await db.prepare('UPDATE dishes SET ingredients = ?, components = ?, recipe = ?, allergens = ?, service_note = ? WHERE name = ?').bind(row.ingredients, row.components, row.recipe, row.beforeAllergens, row.beforeNote, row.name).run();
+    }
+    await db.prepare("UPDATE dishes SET ingredients = ? WHERE name = 'Ригатони с креветками'").bind('["состав изменён кухней"]').run();
+    await db.prepare("DELETE FROM app_settings WHERE key = 'allergen_review_20260915'").run();
+    route = loadRoute();
+    const updated = await get();
+    assert.ok(updated.dishes.find((d) => d.name === 'Банановый').allergens.includes('молочные продукты'));
+    assert.ok(updated.dishes.find((d) => d.name === 'Ризотто с морепродуктами').allergens.includes('сельдерей'));
+    assert.ok(!updated.dishes.find((d) => d.name === 'Ригатони с креветками').allergens.includes('сельдерей'));
+    await db.prepare("UPDATE dishes SET service_note = 'Уточнено кухней' WHERE name = 'Банановый'").run();
+    route = loadRoute();
+    assert.equal((await get()).dishes.find((d) => d.name === 'Банановый').service_note, 'Уточнено кухней');
   });
 
   await t.test('logout invalidates the saved session', async () => {

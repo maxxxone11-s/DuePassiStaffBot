@@ -124,7 +124,8 @@ function DishDetail({ dish, onClose, selectedForTest, canAddToTest, onToggleTest
           <div className="ingredient-cloud">{baseIngredients.map((item) => <span key={item}>{item}</span>)}</div>
           {compoundIngredients.length > 0 && <><p className="eyebrow ingredient-subtitle">Соусы и составные компоненты</p><div className="ingredient-cloud compound-cloud">{compoundIngredients.map((item) => <button className="nested-ingredient" key={item} onClick={() => setComponentName(item)}>{item}<small>нажмите, чтобы открыть состав</small><b>›</b></button>)}</div></>}
           </>}{dish.service_note && <div className="info-block"><span className="info-symbol">!</span><div><strong>{dish.recipe ? 'Приготовление и подача' : 'Важно для гостя'}</strong><p>{dish.service_note}</p></div></div>}
-          {(!dish.recipe || dish.allergens.length > 0) && <div className="allergen-row"><span>Аллергены</span><strong>{dish.allergens.join(', ') || 'не указаны'}</strong></div>}
+          <div className="allergen-row"><span>Аллергены</span><strong>{dish.allergens.join(', ') || 'не указаны — уточнить состав'}</strong></div>
+          <p className="field-help">Список составлен по доступной техкарте. При аллергии у гостя уточните состав и возможный перекрёстный контакт на кухне.</p>
           {dish.weight > 0 && <div className="weight-row"><span>Выход блюда</span><strong>{dish.weight} г</strong></div>}
           {!isDrink(dish.category) && <button className={`test-picker-button ${selectedForTest ? 'selected' : ''}`} disabled={!selectedForTest && !canAddToTest} onClick={onToggleTest}><span>{selectedForTest ? '✓' : '+'}</span><div><strong>{selectedForTest ? 'Добавлено в тест' : 'Добавить в тест'}</strong><small>{selectedForTest ? 'Нажмите, чтобы убрать позицию' : canAddToTest ? 'Позиция гарантированно попадёт в следующий тест' : 'Можно выбрать не более 15 позиций'}</small></div></button>}
         </div>
