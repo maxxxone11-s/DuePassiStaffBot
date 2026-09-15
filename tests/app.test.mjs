@@ -30,6 +30,18 @@ function loadSource(file, dependencies = {}) {
 
 const database = loadSource('lib/db.ts');
 const { buildSauces } = loadSource('lib/sauces.ts');
+test('sauce allergens follow nested ingredients without inheriting dish allergens', () => {
+  const sauces = buildSauces([
+    { id: 1, name: 'Рыба', category: 'fish', ingredients: ['соус тестовый'], allergens: ['рыба'], components: { 'соус тестовый': ['бешамель', 'песто', 'паста мисо'], 'бешамель': ['мука', 'масло сливочное', 'мускатный орех', 'молоко'], 'песто': ['пармезан', 'орех кедровый'] } },
+    { id: 2, name: 'Овощи', category: 'healthy', ingredients: ['соус тестовый'], components: { 'соус тестовый': ['кунжут', 'сельдерей'] } },
+    { id: 3, name: 'Другое', category: 'meat', ingredients: ['соус рисовый'], components: { 'соус рисовый': ['рисовая мука', 'мука кукурузная'] } },
+  ]);
+  const sauce = sauces.find(s => s.name === 'Соус тестовый');
+  assert.deepEqual(new Set(sauce.allergens), new Set(['глютен', 'молочные продукты', 'кедровый орех', 'соя', 'кунжут', 'сельдерей']));
+  assert.ok(!sauce.allergens.includes('рыба'));
+  assert.ok(sauce.service_note.includes('всех показанных вариантов'));
+  assert.deepEqual(sauces.find(s => s.name === 'Соус рисовый').allergens, []);
+});
 test('sauce catalog deduplicates aliases, preserves variants and follows nested uses', () => {
   const dishes = [
     { id: 1, name: 'Первое блюдо', category: 'meat', ingredients: ['заправка азия'], components: { 'заправка азия': ['соевый соус', 'кунжут'] } },
