@@ -29,6 +29,26 @@ function loadSource(file, dependencies = {}) {
 }
 
 const database = loadSource('lib/db.ts');
+const { buildSauces } = loadSource('lib/sauces.ts');
+test('sauce catalog deduplicates aliases, preserves variants and follows nested uses', () => {
+  const dishes = [
+    { id: 1, name: 'Первое блюдо', category: 'meat', ingredients: ['заправка азия'], components: { 'заправка азия': ['соевый соус', 'кунжут'] } },
+    { id: 2, name: 'Второе блюдо', category: 'fish', ingredients: ['соус азия'], components: { 'соус азия': ['кунжут', 'соевый соус'] } },
+    { id: 3, name: 'Третье блюдо', category: 'fish', ingredients: ['соус азия'], components: { 'соус азия': ['сливки'] } },
+    { id: 4, name: 'Десерт', category: 'desserts', ingredients: ['крем-брюле', 'сыр креметте'], components: {} },
+  ];
+  const sauces = buildSauces(dishes);
+  assert.equal(sauces.length, 2);
+  const asia = sauces.find(s => s.name === 'Соус азия');
+  assert.equal(asia.recipe.variants.length, 2);
+  assert.equal(asia.used_in.length, 3);
+  assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').used_in, ['Второе блюдо', 'Первое блюдо']);
+  assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').ingredients, []);
+  dishes[0].name = 'Новое название';
+  assert.ok(buildSauces(dishes).find(s => s.name === 'Соус азия').used_in.includes('Новое название'));
+  const cyclic = [{ id: 1, name: 'Блюдо', category: 'meat', ingredients: ['соус а'], components: { 'соус а': ['соус б'], 'соус б': ['соус а'] } }];
+  assert.equal(buildSauces(cyclic).length, 2);
+});
 const recipes = loadSource('lib/recipes.ts');
 const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
 const allergenReview = JSON.parse(readFileSync(join(root, 'data/allergen-review-2026-09-15.json'), 'utf8'));

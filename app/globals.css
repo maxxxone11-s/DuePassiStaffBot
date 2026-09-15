@@ -240,3 +240,6 @@ input,textarea,select { min-width:0; max-width:100%; }
 .has-photo .detail-hero h2 { font-size:28px; }
 .has-photo .detail-hero p { max-width:none; color:#5d6c64; font-size:14px; line-height:1.5; }
 .has-photo .detail-body { padding-top:4px; }
+
+.sauce-usage { margin: 18px 0; font-size: 13px; line-height: 1.6; color: #66736c; overflow-wrap: anywhere; }
+.sauce-usage > span { display: block; margin-bottom: 4px; color: #536159; }
