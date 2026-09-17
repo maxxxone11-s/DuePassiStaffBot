@@ -51,13 +51,14 @@ test('sauce catalog deduplicates aliases, selects one existing composition and f
     { id: 4, name: 'Десерт', category: 'desserts', ingredients: ['крем-брюле', 'сыр креметте'], components: {} },
   ];
   const sauces = buildSauces(dishes);
-  assert.equal(sauces.length, 2);
+  assert.equal(sauces.length, 1);
   const asia = sauces.find(s => s.name === 'Соус азия');
   assert.equal(asia.recipe, null);
   assert.deepEqual(asia.ingredients, ['соевый соус', 'кунжут']);
   assert.equal(asia.used_in.length, 3);
-  assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').used_in, ['Второе блюдо', 'Первое блюдо']);
-  assert.deepEqual(sauces.find(s => s.name === 'Соевый соус').ingredients, []);
+  assert.ok(!sauces.some(s => s.name === 'Соевый соус'));
+  assert.ok(asia.ingredients.includes('соевый соус'));
+  assert.ok(asia.allergens.includes('соя'));
   dishes[0].name = 'Новое название';
   assert.ok(buildSauces(dishes).find(s => s.name === 'Соус азия').used_in.includes('Новое название'));
   const cyclic = [{ id: 1, name: 'Блюдо', category: 'meat', ingredients: ['соус а'], components: { 'соус а': ['соус б'], 'соус б': ['соус а'] } }];

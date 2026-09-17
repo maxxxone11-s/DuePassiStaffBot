@@ -4,6 +4,13 @@ const normalize = (name: string) => name.trim().toLocaleLowerCase('ru-RU').repla
 const keyOf = (name: string) => aliases[normalize(name)] || normalize(name);
 const extras = new Set(['песто', 'понзу', 'майонез', 'майонез 78%', 'майонез острый', 'демиглас', 'бешамель', 'гуакамоле', 'чимичурри', 'релиш', 'кетчуп', 'табаско', 'терияки', 'томатная сальса', 'томатная база', 'зеленое масло', 'чесночное масло', 'острое масло', 'масло с розмарином', 'мусс пармезан']);
 const isSauce = (name: string) => /соус|^крем (дайкон|из артишоков|черри)$|^крем-бальзамик$/.test(name) || extras.has(name);
+// Purchased bases still participate in ingredient/allergen traversal, but do
+// not need standalone learning cards.
+const hiddenSauces = new Set([
+  'кетчуп', 'майонез', 'майонез 78%', 'соево-креветочный соус',
+  'соевый соус', 'соус ворчестер', 'соус кимчи', 'соус сладкий чили',
+  'соус шрирача', 'табаско', 'терияки', 'томатная сальса', 'устричный соус база',
+]);
 
 // Only the sauce's ingredients are inspected, never the allergens of its dishes.
 const ingredientAllergens: [RegExp, string][] = [
@@ -61,7 +68,7 @@ export function buildSauces(dishes: SourceDish[]) {
     dish.ingredients.forEach(visit);
     Object.values(dish.components).flat().forEach(visit);
   }
-  return [...entries.values()].filter(e => e.used.size).sort((a, b) => a.name.localeCompare(b.name, 'ru')).map((entry, index) => {
+  return [...entries.values()].filter(e => e.used.size && !hiddenSauces.has(keyOf(e.name))).sort((a, b) => a.name.localeCompare(b.name, 'ru')).map((entry, index) => {
     const ingredients = [...entry.variants.values()].sort((a, b) => b.ingredients.length - a.ingredients.length)[0]?.ingredients ?? [];
     const allergens = new Set<string>();
     const checked = new Set<string>();
