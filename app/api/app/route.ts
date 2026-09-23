@@ -1116,6 +1116,24 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_20260923_b', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  const thirdSeptemberPhotosAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'menu_photos_20260923_c'").first();
+  if (!thirdSeptemberPhotosAdded) {
+    const photos = [
+      ['pizza', 'Пепперони', 'pepperoni-september'],
+      ['pasta', 'Ригатони с камчатским крабом', 'rigatoni-crab'],
+      ['pasta', 'Спагетти болоньезе', 'bolognese'],
+      ['pasta', 'Ригатони с креветками', 'rigatoni-shrimp'],
+      ['meat', 'Томлёные щёчки с картофельным пюре', 'braised-cheeks'],
+      ['soups', 'Куриный бульон с лапшой', 'chicken-noodle-soup'],
+      ['meat', 'Котлеты из курицы с картофельным пюре', 'chicken-cutlets'],
+      ['pasta', 'Ризотто с морепродуктами', 'seafood-risotto-september'],
+      ['bruschetta', 'Брускетта с брезаолой', 'bresaola-bruschetta'],
+      ['meat', 'Бургер «Due Passi»', 'duepassi-burger-september'],
+    ];
+    const statements = photos.map(([category, name, slug]) => db.prepare('UPDATE dishes SET photo = ? WHERE category = ? AND name = ?').bind(`/dishes/${slug}-960.webp`, category, name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_20260923_c', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
