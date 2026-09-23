@@ -1134,6 +1134,20 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_20260923_c', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  const fourthSeptemberPhotosAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'menu_photos_20260923_d'").first();
+  if (!fourthSeptemberPhotosAdded) {
+    const photos = [
+      ['fish', 'Лосось с соусом фенхель и юдзу', 'salmon-fennel-september'],
+      ['fish', 'Филе дорадо с соусом сальса-верде', 'dorado-salsa-verde'],
+      ['sides', 'Кабачки на гриле с соусом дзадзики', 'grilled-zucchini'],
+      ['sides', 'Овощи гриль', 'grilled-vegetables'],
+      ['crudo', 'Тар-тар из лосося', 'salmon-tartare'],
+      ['fish', 'Мусака от шефа', 'chef-moussaka-september'],
+    ];
+    const statements = photos.map(([category, name, slug]) => db.prepare('UPDATE dishes SET photo = ? WHERE category = ? AND name = ?').bind(`/dishes/${slug}-960.webp`, category, name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_20260923_d', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
