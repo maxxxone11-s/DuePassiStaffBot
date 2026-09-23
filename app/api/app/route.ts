@@ -1166,6 +1166,26 @@ async function initializeDb() {
       db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('vitello_photo_20260923_updated', '1', ?)").bind(new Date().toISOString()),
     ]);
   }
+  const winePhotosAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'wine_photos_v1'").first();
+  if (!winePhotosAdded) {
+    const photos = [
+      ['Просекко Брют Bruni', 'wine-bruni'],
+      ['Эстелар Совиньон Блан', 'wine-estelar-sauvignon'],
+      ['Трапиче Виньярдс Шардоне', 'wine-trapiche-chardonnay'],
+      ['Ханс Баер Рислинг', 'wine-hans-baer'],
+      ['Кейп Ориджинал Шенен Блан', 'wine-cape-chenin'],
+      ['Маре & Гриль Винью Верде', 'wine-mare-grill'],
+      ['Чело Пино Гриджо', 'wine-cielo-pinot'],
+      ['Трапиче Виньярдс Мальбек', 'wine-trapiche-malbec'],
+      ['Эстелар Карменер', 'wine-estelar-carmenere'],
+      ['Южная Вертикаль Каберне Фран', 'wine-vertical-cabernet'],
+      ['Кейп Ориджинал Пинотаж', 'wine-cape-pinotage'],
+      ['Мелини Кьянти Ризерва', 'wine-melini-chianti'],
+    ];
+    const statements = photos.map(([name, slug]) => db.prepare("UPDATE dishes SET photo = ? WHERE category = 'wine' AND name = ?").bind(`/dishes/${slug}-960.webp`, name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('wine_photos_v1', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
