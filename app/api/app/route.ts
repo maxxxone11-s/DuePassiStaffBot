@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppDatabase, getDb } from '@/lib/db';
 import drinkSeeds from '@/data/drinks.json';
+import wineSeeds from '@/data/wines.json';
 import allergenReview from '@/data/allergen-review-2026-09-15.json';
 import { isDrink, recipeIngredients, validRecipe } from '@/lib/recipes';
 
@@ -986,6 +987,16 @@ async function initializeDb() {
       WHERE NOT EXISTS (SELECT 1 FROM dishes WHERE category = ? AND name = ?)`)
       .bind(drink.name, drink.description, JSON.stringify(recipeIngredients(drink.recipe)), drink.service_note, drink.badge, drink.color, drink.category, JSON.stringify(drink.recipe), drink.category, drink.name));
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('drinks_seed_v1', '1', ?)").bind(new Date().toISOString()));
+    await db.batch(statements);
+  }
+  const winesAdded = await db.prepare("SELECT value FROM app_settings WHERE key = 'wine_glasses_v1'").first();
+  if (!winesAdded) {
+    const statements = wineSeeds.map((wine) => db.prepare(`INSERT INTO dishes
+      (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components)
+      SELECT ?, ?, '[]', '[]', '', ?, ?, 'wine', 0, ?
+      WHERE NOT EXISTS (SELECT 1 FROM dishes WHERE category = 'wine' AND name = ?)`)
+      .bind(wine.name, wine.description, wine.group, wine.group === 'Красное' ? 'wine' : wine.group === 'Белое' ? 'sage' : 'gold', JSON.stringify(wine.components), wine.name));
+    statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('wine_glasses_v1', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
   const syrupNoteRemoved = await db.prepare("SELECT value FROM app_settings WHERE key = 'remove_syrup_note_v1'").first();

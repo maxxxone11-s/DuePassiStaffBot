@@ -67,7 +67,7 @@ test('sauce catalog deduplicates aliases, selects one existing composition and f
 const recipes = loadSource('lib/recipes.ts');
 const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
 const allergenReview = JSON.parse(readFileSync(join(root, 'data/allergen-review-2026-09-15.json'), 'utf8'));
-const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds, '@/data/allergen-review-2026-09-15.json': allergenReview });
+const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds, '@/data/wines.json': JSON.parse(readFileSync(join(root, 'data/wines.json'), 'utf8')), '@/data/allergen-review-2026-09-15.json': allergenReview });
 let route = loadRoute();
 let cookie = '';
 const request = (body) => new NextRequest('http://localhost/api/app', {
@@ -87,8 +87,24 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     cookie = response.headers.get('set-cookie').split(';')[0];
     initial = await get();
     assert.equal(initial.user.role, 'admin');
-    assert.equal(new Set(initial.dishes.map((dish) => dish.category)).size, 16);
+    assert.equal(new Set(initial.dishes.map((dish) => dish.category)).size, 17);
     assert.equal(new Set(initial.dishes.map((dish) => `${dish.category}:${dish.name}`)).size, initial.dishes.length);
+  });
+
+  await t.test('wine migration adds only twelve glass wines and preserves edits on restart', async () => {
+    const wines = initial.dishes.filter((dish) => dish.category === 'wine');
+    assert.equal(wines.length, 12);
+    for (const [group, count] of [['Красное', 5], ['Белое', 6], ['Игристое', 1]]) {
+      assert.equal(wines.filter((wine) => wine.components['Тип'].includes(group)).length, count);
+    }
+    assert.ok(wines.every((wine) => wine.components['Подача'][0] === 'Бокалы' && !wine.components['Объём бутылки']));
+    assert.ok(wines.every((wine) => !/нуволе/i.test(wine.name)));
+    const wine = wines[0];
+    await database.getDb().prepare('UPDATE dishes SET short_description = ? WHERE id = ?').bind('Описание от администратора', wine.id).run();
+    route = loadRoute();
+    const after = await get();
+    assert.equal(after.dishes.filter((dish) => dish.category === 'wine').length, 12);
+    assert.equal(after.dishes.find((dish) => dish.id === wine.id).short_description, 'Описание от администратора');
   });
 
   await t.test('renamed dishes survive requests and a fresh route initialization', async () => {
