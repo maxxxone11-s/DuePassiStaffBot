@@ -3,7 +3,7 @@
 /* Telegram profile photos are remote, user-provided URLs rendered directly. */
 /* eslint-disable @next/next/no-img-element */
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { RecipeCard, RecipeEditor } from './components/recipe';
 import { isDrink, type Recipe } from '@/lib/recipes';
 import { buildSauces } from '@/lib/sauces';
@@ -141,6 +141,12 @@ function DishDetail({ dish, onClose, selectedForTest, canAddToTest, onToggleTest
 
 function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish) => void }) {
   const [sectionId, setSectionId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLElement>(null);
+  const catalogScrollTop = useRef(0);
+  useLayoutEffect(() => {
+    const scroller = menuRef.current?.closest<HTMLElement>('.content-scroll');
+    if (scroller) scroller.scrollTop = sectionId ? 0 : catalogScrollTop.current;
+  }, [sectionId]);
   const [query, setQuery] = useState('');
   const [rootQuery, setRootQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -165,7 +171,7 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
   const otherPizza = currentSection?.id === 'pizza' ? filtered.filter((dish) => !tomatoPizza.includes(dish) && !creamyPizza.includes(dish)) : [];
 
   if (!currentSection) return <>
-    <section className="intro-card menu-intro">
+    <section ref={menuRef} className="intro-card menu-intro">
       <p className="intro-kicker">Меню ресторана</p><h2>Изучайте каждое<br />блюдо уверенно.</h2>
       <div className="intro-meta"><span>{menuSections.length} разделов</span><span>{dishes.length} позиций</span></div>
     </section>
@@ -175,7 +181,7 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
       {rootResults.length ? renderDishList(rootResults) : <div className="empty-state"><span>⌕</span><strong>Ничего не найдено</strong><p>Попробуйте написать часть названия</p></div>}
     </> : <><div className="catalog-heading"><div><p className="eyebrow">Все категории</p><h2>Разделы меню</h2></div><span>{menuSections.length}</span></div>
     <div className="category-grid">
-      {menuSections.map((section, index) => <button className={`category-card tone-${section.tone}`} key={section.id} onClick={() => { setSectionId(section.id); setSearchOpen(false); setQuery(''); }}>
+      {menuSections.map((section, index) => <button className={`category-card tone-${section.tone}`} key={section.id} onClick={() => { catalogScrollTop.current = menuRef.current?.closest<HTMLElement>('.content-scroll')?.scrollTop ?? 0; setSectionId(section.id); setSearchOpen(false); setQuery(''); }}>
         <span className="category-index">{String(index + 1).padStart(2, '0')}</span>
         <span className="category-symbol">{section.symbol}</span>
         <div><strong>{section.name}</strong><small>{dishes.filter((dish) => dish.category === section.id).length ? `${dishes.filter((dish) => dish.category === section.id).length} позиций` : section.caption}</small></div>
@@ -186,7 +192,7 @@ function MenuView({ dishes, onSelect }: { dishes: Dish[]; onSelect: (dish: Dish)
 
   const sectionNumber = menuSections.findIndex((section) => section.id === currentSection.id) + 1;
   const hasDishes = sectionDishes.length > 0;
-  return <section className="category-view">
+  return <section ref={menuRef} className="category-view">
     <button className="back-link category-back" onClick={() => setSectionId(null)}><Icon name="back" /> Все разделы</button>
     <div className={`category-banner tone-${currentSection.tone}`}>
       <span className="category-symbol">{currentSection.symbol}</span>
