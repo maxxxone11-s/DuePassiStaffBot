@@ -1148,6 +1148,13 @@ async function initializeDb() {
     statements.push(db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('menu_photos_20260923_d', '1', ?)").bind(new Date().toISOString()));
     await db.batch(statements);
   }
+  const vitelloPhotoUpdated = await db.prepare("SELECT value FROM app_settings WHERE key = 'vitello_photo_20260923_updated'").first();
+  if (!vitelloPhotoUpdated) {
+    await db.batch([
+      db.prepare("UPDATE dishes SET photo = '/dishes/vitello-tonnato-updated-960.webp' WHERE category = 'starters' AND name = 'Вителло тоннато'"),
+      db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('vitello_photo_20260923_updated', '1', ?)").bind(new Date().toISOString()),
+    ]);
+  }
   await db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
   await db.prepare('PRAGMA optimize').run();
 }
