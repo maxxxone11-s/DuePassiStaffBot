@@ -231,7 +231,7 @@ input,textarea,select { min-width:0; max-width:100%; }
 }
 
 .detail-photo { position:relative; background:#e7ebe8; aspect-ratio:4/3; }
-.detail-photo img { display:block; width:100%; height:100%; object-fit:cover; }
+.detail-photo img { display:block; width:100%; height:100%; object-fit:contain; }
 .detail-photo .photo-close { position:absolute; top:16px; right:16px; background:rgba(15,24,20,.78); color:#fff; }
 .has-photo .detail-hero { min-height:0; padding:20px 21px 23px; background:#f9fbfa; color:var(--ink); }
 .has-photo .detail-hero:after { display:none; }
@@ -244,7 +244,7 @@ input,textarea,select { min-width:0; max-width:100%; }
 .sauce-usage { margin: 18px 0; font-size: 13px; line-height: 1.6; color: #66736c; overflow-wrap: anywhere; }
 .sauce-usage > span { display: block; margin-bottom: 4px; color: #536159; }
 
-.dish-visual > img { display: block; width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.dish-visual > img { display: block; width: 100%; height: 100%; object-fit: contain; background:#e7ebe8; position: absolute; inset: 0; }
 
 .wine-serving { display:flex; gap:8px; margin:20px 0; padding:5px; background:#e9eeeb; border-radius:16px; }
 .wine-serving button { flex:1; padding:13px; border:0; border-radius:12px; color:var(--text); background:transparent; font:inherit; font-weight:600; }
