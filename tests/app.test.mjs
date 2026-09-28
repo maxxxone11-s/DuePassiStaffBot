@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,8 @@ test('sauce catalog deduplicates aliases, selects one existing composition and f
 const recipes = loadSource('lib/recipes.ts');
 const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
 const allergenReview = JSON.parse(readFileSync(join(root, 'data/allergen-review-2026-09-15.json'), 'utf8'));
-const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/sections.json': JSON.parse(readFileSync(join(root, 'data/sections.json'), 'utf8')), '@/data/drinks.json': drinkSeeds, '@/data/wines.json': JSON.parse(readFileSync(join(root, 'data/wines.json'), 'utf8')), '@/data/allergen-review-2026-09-15.json': allergenReview });
+const photos = loadSource('lib/photos.ts', { './db': database });
+const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/photos': photos, '@/lib/recipes': recipes, '@/data/sections.json': JSON.parse(readFileSync(join(root, 'data/sections.json'), 'utf8')), '@/data/drinks.json': drinkSeeds, '@/data/wines.json': JSON.parse(readFileSync(join(root, 'data/wines.json'), 'utf8')), '@/data/allergen-review-2026-09-15.json': allergenReview });
 let route = loadRoute();
 let cookie = '';
 const request = (body) => new NextRequest('http://localhost/api/app', {
@@ -111,6 +113,38 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     finally { await database.getDb().prepare("UPDATE staff SET role = 'admin' WHERE id = ?").bind(initial.user.id).run(); }
     await database.getDb().prepare('DELETE FROM dishes WHERE category = ?').bind(id).run();
     await database.getDb().prepare('DELETE FROM menu_sections WHERE id = ?').bind(id).run();
+  });
+
+  await t.test('photo upload enforces permissions, converts images and preserves saved photos', async () => {
+    const bytes = await sharp({ create: { width: 1200, height: 800, channels: 3, background: '#88aa77' } }).png().toBuffer();
+    const upload = (body, session = cookie, extra = {}) => route.POST(new NextRequest('http://localhost/api/app?upload=photo', { method: 'POST', headers: { cookie: session, ...extra }, body }));
+    assert.equal((await upload(bytes, '')).status, 401);
+    await database.getDb().prepare("UPDATE staff SET role='employee' WHERE id=?").bind(initial.user.id).run();
+    try { assert.equal((await upload(bytes)).status, 403); }
+    finally { await database.getDb().prepare("UPDATE staff SET role='admin' WHERE id=?").bind(initial.user.id).run(); }
+    assert.equal((await upload(bytes, cookie, { origin: 'https://evil.example' })).status, 403);
+    assert.equal((await upload(Buffer.from('not an image'))).status, 400);
+    assert.equal((await upload(bytes, cookie, { 'content-length': String(16 * 1024 * 1024) })).status, 413);
+    const response = await upload(bytes); assert.equal(response.status, 200);
+    const { photo } = await response.json();
+    const dish = (await get()).dishes.find(d => d.category === 'crudo');
+    const originalPhoto = dish.photo;
+    assert.equal((await post({ action: 'saveDish', ...dish, photo })).status, 200);
+    route = loadRoute();
+    assert.equal((await get()).dishes.find(d => d.id === dish.id).photo, photo);
+    for (const [size, width] of [[960,960],[480,480]]) {
+      const image = await route.GET(new NextRequest('http://localhost'+photo.replace('size=960', 'size='+size)));
+      assert.equal(image.headers.get('content-type'), 'image/webp');
+      const meta = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+      assert.equal(meta.width, width); assert.equal(meta.format, 'webp');
+    }
+    const oldClient = { ...dish }; delete oldClient.photo;
+    await post({ action: 'saveDish', ...oldClient });
+    assert.equal((await get()).dishes.find(d => d.id === dish.id).photo, photo);
+    assert.equal((await post({ action: 'saveDish', ...dish, photo: 'https://evil.example/image' })).status, 400);
+    assert.equal((await post({ action: 'saveDish', ...dish, photo: null })).status, 200);
+    assert.equal((await get()).dishes.find(d => d.id === dish.id).photo, null);
+    await database.getDb().prepare('UPDATE dishes SET photo=? WHERE id=?').bind(originalPhoto, dish.id).run();
   });
 
   await t.test('wine migration adds only twelve glass wines and preserves edits on restart', async () => {

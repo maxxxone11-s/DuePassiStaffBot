@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { uploadPhoto, readPhoto, photoPattern } from '@/lib/photos';
 import { AppDatabase, getDb } from '@/lib/db';
 import drinkSeeds from '@/data/drinks.json';
 import defaultSections from '@/data/sections.json';
@@ -942,6 +943,7 @@ async function initializeDb() {
   ]);
   await db.prepare('CREATE TABLE IF NOT EXISTS menu_sections (id TEXT PRIMARY KEY, name TEXT NOT NULL, normalized_name TEXT NOT NULL UNIQUE, caption TEXT NOT NULL, symbol TEXT NOT NULL, tone TEXT NOT NULL, sort_order INTEGER NOT NULL)').run();
   await db.batch(defaultSections.map((section, index) => db.prepare('INSERT OR IGNORE INTO menu_sections (id, name, normalized_name, caption, symbol, tone, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(section.id, section.name, section.name.toLocaleLowerCase('ru-RU').replaceAll('ё', 'е'), section.caption, section.symbol, section.tone, index)));
+  await db.prepare('CREATE TABLE IF NOT EXISTS dish_photos (id TEXT PRIMARY KEY, full BLOB NOT NULL, thumb BLOB NOT NULL, created_at TEXT NOT NULL)').run();
   await ensureDishColumns(db);
   await ensureStaffColumns(db);
   await db.batch([
@@ -1199,6 +1201,7 @@ function parseDish(row: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   await initDb();
+  if (request.nextUrl.searchParams.has('photo')) return readPhoto(request, db);
   const currentUser = await getCurrentUser(request);
   if (!currentUser) return NextResponse.json({ user: null, dishes: [], invites: [], staff: [], attempts: [], staffCount: 0, employeeAccessCode: null });
   const dishes = await db.prepare('SELECT * FROM dishes WHERE active = 1 ORDER BY id').all();
@@ -1230,6 +1233,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   await initDb();
+  if (request.nextUrl.searchParams.get('upload') === 'photo') {
+    const user = await getCurrentUser(request);
+    if (!user) return NextResponse.json({ error: 'Войдите снова' }, { status: 401 });
+    if (user.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    const origin = request.headers.get('origin');
+    if (origin && origin !== request.nextUrl.origin && origin !== process.env.SITE_URL) return NextResponse.json({ error: 'Недопустимый источник запроса' }, { status: 403 });
+    return uploadPhoto(request, db);
+  }
+
   let body: Record<string, unknown>;
   try {
     const parsed: unknown = await request.json();
@@ -1359,17 +1371,26 @@ export async function POST(request: NextRequest) {
     const category = String(body.category || 'crudo');
     if (category === 'sauces' || !await db.prepare('SELECT id FROM menu_sections WHERE id = ?').bind(category).first()) return NextResponse.json({ error: 'Выберите существующий раздел' }, { status: 400 });
     const id = Number(body.id || 0);
-    const existing = id ? await db.prepare('SELECT recipe FROM dishes WHERE id = ?').bind(id).first<{ recipe: string }>() : null;
+    const existing = id ? await db.prepare('SELECT recipe, photo FROM dishes WHERE id = ?').bind(id).first<{ recipe: string; photo: string | null }>() : null;
     if (id && !existing) return NextResponse.json({ error: 'Позиция не найдена' }, { status: 404 });
     // Preserve recipes when an older admin client edits an existing item.
     const recipe: unknown = body.recipe === undefined ? JSON.parse(existing?.recipe || 'null') : body.recipe;
     if (recipe !== null && !validRecipe(recipe)) return NextResponse.json({ error: 'Проверьте состав и объёмы техкарты' }, { status: 400 });
     if (isDrink(String(body.category)) && !recipe) return NextResponse.json({ error: 'Добавьте состав техкарты напитка' }, { status: 400 });
+    let photo = existing?.photo ?? null;
+    if (body.photo !== undefined && body.photo !== photo) {
+      if (body.photo === null) photo = null;
+      else {
+        const match = typeof body.photo === 'string' ? photoPattern.exec(body.photo) : null;
+        if (!match || !await db.prepare('SELECT id FROM dish_photos WHERE id = ?').bind(match[1]).first()) return NextResponse.json({ error: 'Загрузите фото заново' }, { status: 400 });
+        photo = String(body.photo);
+      }
+    }
     const ingredients = validRecipe(recipe) ? recipeIngredients(recipe) : body.ingredients || [];
     const values = [String(body.name || '').trim(), String(body.short_description || '').trim(), JSON.stringify(ingredients), JSON.stringify(body.allergens || []), String(body.service_note || ''), String(body.badge || ''), String(body.color || 'sage'), String(body.category || 'crudo'), Number(body.weight || 0), JSON.stringify(body.components || {}), JSON.stringify(recipe)];
     if (!values[0]) return NextResponse.json({ error: 'Введите название блюда' }, { status: 400 });
-    if (id) await db.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=?, recipe=? WHERE id=?').bind(...values, id).run();
-    else await db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values).run();
+    if (id) await db.prepare('UPDATE dishes SET name=?, short_description=?, ingredients=?, allergens=?, service_note=?, badge=?, color=?, category=?, weight=?, components=?, recipe=?, photo=? WHERE id=?').bind(...values, photo, id).run();
+    else await db.prepare('INSERT INTO dishes (name, short_description, ingredients, allergens, service_note, badge, color, category, weight, components, recipe, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(...values, photo).run();
     return NextResponse.json({ ok: true });
   }
 

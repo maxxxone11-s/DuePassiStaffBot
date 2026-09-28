@@ -256,3 +256,8 @@ input,textarea,select { min-width:0; max-width:100%; }
 
 .detail-photo.wine-photo { background:#f4f3ee; }
 .detail-photo.wine-photo img, .dish-visual.wine-thumbnail > img { object-fit:contain; background:#f4f3ee; }
+
+.photo-editor { display:grid; gap:12px; }
+.photo-editor > img { width:100%; max-height:240px; object-fit:contain; border-radius:16px; background:#eef1ef; }
+.photo-upload-button { position:relative; padding:14px; border:1px solid var(--accent); border-radius:14px; text-align:center; color:var(--accent); overflow:hidden; }
+.photo-upload-button input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
