@@ -67,7 +67,7 @@ test('sauce catalog deduplicates aliases, selects one existing composition and f
 const recipes = loadSource('lib/recipes.ts');
 const drinkSeeds = JSON.parse(readFileSync(join(root, 'data/drinks.json'), 'utf8'));
 const allergenReview = JSON.parse(readFileSync(join(root, 'data/allergen-review-2026-09-15.json'), 'utf8'));
-const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/drinks.json': drinkSeeds, '@/data/wines.json': JSON.parse(readFileSync(join(root, 'data/wines.json'), 'utf8')), '@/data/allergen-review-2026-09-15.json': allergenReview });
+const loadRoute = () => loadSource('app/api/app/route.ts', { '@/lib/db': database, '@/lib/recipes': recipes, '@/data/sections.json': JSON.parse(readFileSync(join(root, 'data/sections.json'), 'utf8')), '@/data/drinks.json': drinkSeeds, '@/data/wines.json': JSON.parse(readFileSync(join(root, 'data/wines.json'), 'utf8')), '@/data/allergen-review-2026-09-15.json': allergenReview });
 let route = loadRoute();
 let cookie = '';
 const request = (body) => new NextRequest('http://localhost/api/app', {
@@ -89,6 +89,28 @@ test('menu, upgrade preservation, sessions and result retries', async (t) => {
     assert.equal(initial.user.role, 'admin');
     assert.equal(new Set(initial.dishes.map((dish) => dish.category)).size, 17);
     assert.equal(new Set(initial.dishes.map((dish) => `${dish.category}:${dish.name}`)).size, initial.dishes.length);
+  });
+
+  await t.test('admin sections persist, keep dish links and reject duplicates and employee writes', async () => {
+    assert.equal(initial.sections.length, 18);
+    assert.equal((await post({ action: 'saveSection', name: '   ' })).status, 400);
+    assert.equal((await post({ action: 'saveSection', name: 'пицца' })).status, 409);
+    const created = await post({ action: 'saveSection', name: ' Завтраки ', caption: 'Утром' });
+    assert.equal(created.status, 200);
+    const { id } = await created.json();
+    assert.ok(id.startsWith('custom-'));
+    assert.equal((await post({ action: 'saveDish', category: id, name: 'Тестовый омлет', ingredients: ['яйцо'] })).status, 200);
+    assert.equal((await post({ action: 'saveSection', id, name: 'Утреннее меню', caption: 'Каждый день' })).status, 200);
+    route = loadRoute();
+    const after = await get();
+    assert.equal(after.sections.find((section) => section.id === id).name, 'Утреннее меню');
+    assert.equal(after.dishes.find((dish) => dish.name === 'Тестовый омлет').category, id);
+    assert.equal((await post({ action: 'saveDish', category: 'not-a-section', name: 'Ошибка' })).status, 400);
+    await database.getDb().prepare("UPDATE staff SET role = 'employee' WHERE id = ?").bind(initial.user.id).run();
+    try { assert.equal((await post({ action: 'saveSection', name: 'Запрещено' })).status, 403); }
+    finally { await database.getDb().prepare("UPDATE staff SET role = 'admin' WHERE id = ?").bind(initial.user.id).run(); }
+    await database.getDb().prepare('DELETE FROM dishes WHERE category = ?').bind(id).run();
+    await database.getDb().prepare('DELETE FROM menu_sections WHERE id = ?').bind(id).run();
   });
 
   await t.test('wine migration adds only twelve glass wines and preserves edits on restart', async () => {

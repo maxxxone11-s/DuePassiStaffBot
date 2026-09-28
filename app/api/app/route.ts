@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppDatabase, getDb } from '@/lib/db';
 import drinkSeeds from '@/data/drinks.json';
+import defaultSections from '@/data/sections.json';
 import wineSeeds from '@/data/wines.json';
 import allergenReview from '@/data/allergen-review-2026-09-15.json';
 import { isDrink, recipeIngredients, validRecipe } from '@/lib/recipes';
@@ -939,6 +940,8 @@ async function initializeDb() {
     db.prepare('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_attempts_staff_id ON attempts(staff_id)'),
   ]);
+  await db.prepare('CREATE TABLE IF NOT EXISTS menu_sections (id TEXT PRIMARY KEY, name TEXT NOT NULL, normalized_name TEXT NOT NULL UNIQUE, caption TEXT NOT NULL, symbol TEXT NOT NULL, tone TEXT NOT NULL, sort_order INTEGER NOT NULL)').run();
+  await db.batch(defaultSections.map((section, index) => db.prepare('INSERT OR IGNORE INTO menu_sections (id, name, normalized_name, caption, symbol, tone, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(section.id, section.name, section.name.toLocaleLowerCase('ru-RU').replaceAll('ё', 'е'), section.caption, section.symbol, section.tone, index)));
   await ensureDishColumns(db);
   await ensureStaffColumns(db);
   await db.batch([
@@ -1221,7 +1224,8 @@ export async function GET(request: NextRequest) {
   const staffCount = await db.prepare('SELECT COUNT(*) AS count FROM staff WHERE active = 1').first<{ count: number }>();
   const isLocal = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
   const employeeAccessCode = isAdmin ? await getEmployeeAccessCode(isLocal) : null;
-  return NextResponse.json({ user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, attempts: attempts.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
+  const sections = await db.prepare('SELECT id, name, caption, symbol, tone FROM menu_sections ORDER BY sort_order, id').all();
+  return NextResponse.json({ sections: sections.results, user: publicUser(currentUser), dishes: dishes.results.map((row) => parseDish(row as Record<string, unknown>)), invites: invites.results, staff: staff.results, attempts: attempts.results, staffCount: staffCount?.count ?? 0, employeeAccessCode });
 }
 
 export async function POST(request: NextRequest) {
@@ -1293,6 +1297,27 @@ export async function POST(request: NextRequest) {
   const currentUser = await getCurrentUser(request);
   if (!currentUser) return NextResponse.json({ error: 'Сессия истекла. Войдите снова' }, { status: 401 });
 
+  if (action === 'saveSection') {
+    if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+    const caption = typeof body.caption === 'string' ? body.caption.trim() : '';
+    const id = typeof body.id === 'string' ? body.id : '';
+    if (!name || name.length > 60 || caption.length > 100) return NextResponse.json({ error: 'Название: от 1 до 60 символов; описание: до 100' }, { status: 400 });
+    if (id && !await db.prepare('SELECT id FROM menu_sections WHERE id = ?').bind(id).first()) return NextResponse.json({ error: 'Раздел не найден' }, { status: 404 });
+    const normalized = name.toLocaleLowerCase('ru-RU').replaceAll('ё', 'е');
+    const duplicate = await db.prepare('SELECT id FROM menu_sections WHERE normalized_name = ? AND id != ?').bind(normalized, id).first();
+    if (duplicate) return NextResponse.json({ error: 'Раздел с таким названием уже есть' }, { status: 409 });
+    const sectionId = id || `custom-${crypto.randomUUID()}`;
+    try {
+      if (id) await db.prepare('UPDATE menu_sections SET name = ?, normalized_name = ?, caption = ? WHERE id = ?').bind(name, normalized, caption, id).run();
+      else await db.prepare("INSERT INTO menu_sections (id, name, normalized_name, caption, symbol, tone, sort_order) SELECT ?, ?, ?, ?, '◇', 'olive', COALESCE(MAX(sort_order), -1) + 1 FROM menu_sections").bind(sectionId, name, normalized, caption).run();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint')) return NextResponse.json({ error: 'Раздел с таким названием уже есть' }, { status: 409 });
+      throw error;
+    }
+    return NextResponse.json({ ok: true, id: sectionId });
+  }
+
   if (action === 'createInvite') {
     if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
     const code = String(body.code || '').trim().toUpperCase();
@@ -1331,6 +1356,8 @@ export async function POST(request: NextRequest) {
 
   if (action === 'saveDish') {
     if (currentUser.role !== 'admin') return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    const category = String(body.category || 'crudo');
+    if (category === 'sauces' || !await db.prepare('SELECT id FROM menu_sections WHERE id = ?').bind(category).first()) return NextResponse.json({ error: 'Выберите существующий раздел' }, { status: 400 });
     const id = Number(body.id || 0);
     const existing = id ? await db.prepare('SELECT recipe FROM dishes WHERE id = ?').bind(id).first<{ recipe: string }>() : null;
     if (id && !existing) return NextResponse.json({ error: 'Позиция не найдена' }, { status: 404 });

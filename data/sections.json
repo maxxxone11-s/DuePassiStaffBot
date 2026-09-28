@@ -1,0 +1,128 @@
+[
+  {
+    "id": "crudo",
+    "name": "Крудо",
+    "caption": "Raw bar",
+    "symbol": "◉",
+    "tone": "sea"
+  },
+  {
+    "id": "starters",
+    "name": "Закуски",
+    "caption": "Для начала",
+    "symbol": "✦",
+    "tone": "olive"
+  },
+  {
+    "id": "bruschetta",
+    "name": "Брускетты",
+    "caption": "На хлебе",
+    "symbol": "▱",
+    "tone": "terracotta"
+  },
+  {
+    "id": "salads",
+    "name": "Салаты",
+    "caption": "Свежие",
+    "symbol": "◇",
+    "tone": "leaf"
+  },
+  {
+    "id": "healthy",
+    "name": "ЗОЖ",
+    "caption": "Баланс",
+    "symbol": "◎",
+    "tone": "mint"
+  },
+  {
+    "id": "soups",
+    "name": "Супы",
+    "caption": "Тёплые",
+    "symbol": "∿",
+    "tone": "amber"
+  },
+  {
+    "id": "pasta",
+    "name": "Паста и ризотто",
+    "caption": "Итальянская классика",
+    "symbol": "≈",
+    "tone": "wheat"
+  },
+  {
+    "id": "pizza",
+    "name": "Пицца",
+    "caption": "Из печи",
+    "symbol": "○",
+    "tone": "tomato"
+  },
+  {
+    "id": "focaccia",
+    "name": "Фокачча",
+    "caption": "Из печи",
+    "symbol": "▤",
+    "tone": "sand"
+  },
+  {
+    "id": "meat",
+    "name": "Мясо и птица",
+    "caption": "Основные блюда",
+    "symbol": "◐",
+    "tone": "wine"
+  },
+  {
+    "id": "sides",
+    "name": "Гарниры",
+    "caption": "Дополнения",
+    "symbol": "+",
+    "tone": "herb"
+  },
+  {
+    "id": "fish",
+    "name": "Рыба и морепродукты",
+    "caption": "Из моря",
+    "symbol": "≋",
+    "tone": "ocean"
+  },
+  {
+    "id": "desserts",
+    "name": "Десерты",
+    "caption": "Dolce",
+    "symbol": "✧",
+    "tone": "berry"
+  },
+  {
+    "id": "lemonade",
+    "name": "Лимонад",
+    "caption": "0,4 л и 1 л",
+    "symbol": "◒",
+    "tone": "mint"
+  },
+  {
+    "id": "milkshakes",
+    "name": "Милкшейки",
+    "caption": "Молочные коктейли",
+    "symbol": "◍",
+    "tone": "berry"
+  },
+  {
+    "id": "tea",
+    "name": "Чай",
+    "caption": "Авторские чаи",
+    "symbol": "♧",
+    "tone": "amber"
+  },
+  {
+    "id": "wine",
+    "name": "Вино",
+    "caption": "Бокалы и бутылки",
+    "symbol": "♧",
+    "tone": "wine"
+  },
+  {
+    "id": "sauces",
+    "name": "Соусы",
+    "caption": "Составы и применение",
+    "symbol": "◌",
+    "tone": "olive"
+  }
+]
